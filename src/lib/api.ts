@@ -1,0 +1,146 @@
+// One data layer for both modes: Supabase when configured, the in-memory demo otherwise.
+import type { FeedPost, LatLng, MemberStatus, NewPulse, PostKind, Pulse } from "./types";
+import { configured, supabase, PHOTO_BUCKET } from "./supabase";
+import * as demo from "./demo";
+import { DAY, MIN } from "./pulse";
+
+const PULSE_SELECT = "*, host:profiles!pulses_host_id_fkey(display_name,avatar_url), memberships(user_id,status,profile:profiles(display_name,avatar_url))";
+
+function bbox(c: LatLng, km: number) {
+  const dLat = km / 111, dLng = km / (111 * Math.cos((c.lat * Math.PI) / 180));
+  return { minLat: c.lat - dLat, maxLat: c.lat + dLat, minLng: c.lng - dLng, maxLng: c.lng + dLng };
+}
+const chunks = <X,>(a: X[], n: number) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
+
+async function attachExact(list: Pulse[]): Promise<Pulse[]> {
+  if (!list.length) return list;
+  const rows: { pulse_id: string; lat: number; lng: number; place_name: string }[] = [];
+  for (const ids of chunks(list.map((p) => p.id), 80)) {
+    // RLS only returns rows this viewer may see
+    const { data, error } = await supabase.from("pulse_locations").select("pulse_id,lat,lng,place_name").in("pulse_id", ids);
+    if (error) throw error;
+    rows.push(...((data ?? []) as typeof rows));
+  }
+  const m = new Map(rows.map((r) => [r.pulse_id, r]));
+  return list.map((p) => {
+    const r = m.get(p.id);
+    return { ...p, exact: r ? { lat: r.lat, lng: r.lng, place_name: r.place_name } : null };
+  });
+}
+
+/** Active Pulses plus the last 30 days of history within ~15 km. */
+export async function loadPulses(center: LatLng): Promise<Pulse[]> {
+  if (!configured) return demo.demoPulses();
+  const b = bbox(center, 15);
+  const { data, error } = await supabase
+    .from("pulses").select(PULSE_SELECT)
+    .gte("ends_at", new Date(Date.now() - 30 * DAY).toISOString())
+    .gte("rough_lat", b.minLat).lte("rough_lat", b.maxLat)
+    .gte("rough_lng", b.minLng).lte("rough_lng", b.maxLng)
+    .order("created_at", { ascending: false }).limit(400);
+  if (error) throw error;
+  return attachExact((data ?? []) as Pulse[]);
+}
+
+/** Search all past Pulses in the area, any age. */
+export async function searchHistory(center: LatLng, q: string, sinceMs: number | null): Promise<Pulse[]> {
+  const term = q.trim().toLowerCase();
+  if (!configured) {
+    return demo.demoPulses().filter((p) =>
+      new Date(p.ends_at).getTime() < Date.now() &&
+      (sinceMs == null || new Date(p.ends_at).getTime() > Date.now() - sinceMs) &&
+      (!term || `${p.title} ${p.area_name}`.toLowerCase().includes(term)));
+  }
+  const b = bbox(center, 15);
+  let query = supabase.from("pulses").select(PULSE_SELECT)
+    .lt("ends_at", new Date().toISOString())
+    .gte("rough_lat", b.minLat).lte("rough_lat", b.maxLat)
+    .gte("rough_lng", b.minLng).lte("rough_lng", b.maxLng);
+  if (sinceMs != null) query = query.gte("ends_at", new Date(Date.now() - sinceMs).toISOString());
+  const safe = term.replace(/[%,()*]/g, " ").trim();
+  if (safe) query = query.or(`title.ilike.%${safe}%,area_name.ilike.%${safe}%`);
+  const { data, error } = await query.order("ends_at", { ascending: false }).limit(200);
+  if (error) throw error;
+  return attachExact((data ?? []) as Pulse[]);
+}
+
+export async function createPulse(np: NewPulse): Promise<string> {
+  if (!configured) return demo.demoCreate(np);
+  const { data, error } = await supabase.rpc("create_pulse", {
+    p_category: np.category, p_title: np.title, p_need: np.need,
+    p_starts_at: new Date(Date.now() + np.startInMin * MIN).toISOString(), p_duration_min: np.durationMin,
+    p_visibility: np.visibility, p_lat: np.lat, p_lng: np.lng, p_place: np.place, p_area: np.area,
+  });
+  if (error) throw error;
+  return data as string;
+}
+export async function joinPulse(id: string): Promise<MemberStatus> {
+  if (!configured) return demo.demoJoin(id);
+  const { data, error } = await supabase.rpc("join_pulse", { p_id: id });
+  if (error) throw error;
+  return data as MemberStatus;
+}
+export async function leavePulse(id: string) {
+  if (!configured) return demo.demoLeave(id);
+  const { error } = await supabase.rpc("leave_pulse", { p_id: id }); if (error) throw error;
+}
+export async function respondRequest(id: string, user: string, accept: boolean) {
+  if (!configured) return demo.demoRespond(id, user, accept);
+  const { error } = await supabase.rpc("respond_request", { p_id: id, p_user: user, p_accept: accept }); if (error) throw error;
+}
+export async function endPulse(id: string) {
+  if (!configured) return demo.demoEnd(id);
+  const { error } = await supabase.rpc("end_pulse", { p_id: id }); if (error) throw error;
+}
+
+export async function loadFeed(pulseIds: string[]): Promise<FeedPost[]> {
+  if (!pulseIds.length) return [];
+  if (!configured) return demo.demoFeed(pulseIds);
+  const out: FeedPost[] = [];
+  for (const ids of chunks(pulseIds, 80)) {
+    const { data, error } = await supabase.from("feed_posts")
+      .select("*, author:profiles!feed_posts_author_id_fkey(display_name,avatar_url)")
+      .in("pulse_id", ids).order("created_at", { ascending: false }).limit(300);
+    if (error) throw error;
+    out.push(...((data ?? []) as FeedPost[]));
+  }
+  return out.sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+/** Shrink a phone photo to ≤1280 px JPEG before upload. */
+async function shrink(file: File): Promise<Blob> {
+  const img = await createImageBitmap(file);
+  const s = Math.min(1, 1280 / Math.max(img.width, img.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+  c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't read that photo"))), "image/jpeg", 0.82));
+}
+
+export async function postToFeed(uid: string, pulseId: string, kind: PostKind, body: string | null, file: File | null) {
+  if (!configured) return demo.demoPost(pulseId, kind, body, file);
+  let photo_path: string | null = null;
+  if (file) {
+    const blob = await shrink(file);
+    photo_path = `${uid}/${pulseId}/${Date.now()}.jpg`;
+    const up = await supabase.storage.from(PHOTO_BUCKET).upload(photo_path, blob, { contentType: "image/jpeg" });
+    if (up.error) throw up.error;
+  }
+  const { error } = await supabase.from("feed_posts").insert({ pulse_id: pulseId, kind: file ? "photo" : kind, body, photo_path });
+  if (error) throw error;
+}
+
+/** Calls `fn` whenever Pulses, joins or feed posts change anywhere. */
+export function subscribe(fn: () => void): () => void {
+  if (!configured) return demo.onDemoChange(fn);
+  const ch = supabase.channel("pulse-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "pulses" }, fn)
+    .on("postgres_changes", { event: "*", schema: "public", table: "memberships" }, fn)
+    .on("postgres_changes", { event: "*", schema: "public", table: "feed_posts" }, fn)
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
+/** Friendly message from a Supabase / Postgres error. */
+export const errText = (e: unknown) =>
+  (e as { message?: string })?.message?.replace(/^.*?ERROR:\s*/, "") || "Something went wrong. Check your connection and try again.";

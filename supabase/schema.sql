@@ -1,0 +1,233 @@
+-- Pulse · Supabase schema
+-- Run this in Supabase: Dashboard → SQL Editor → New query → paste → Run.
+-- Safe to run again after updates: it only adds what's missing and refreshes rules and functions.
+--
+-- Privacy model
+--   pulses           public. Holds only the ROUGH location (snapped to a ~330 m grid) and an area name.
+--   pulse_locations  the EXACT pin + place name. Row-level security returns it only when
+--                    the Pulse is "everyone can see", or you are the host, or the host accepted you.
+--   All joins / accepts / ending go through security-definer functions, so nobody can
+--   write memberships directly or fake an acceptance.
+
+create extension if not exists pgcrypto;
+
+-- ---------- types ----------
+do $$ begin
+  create type pulse_category   as enum ('sport','music','games','outdoor','make');
+  create type exact_visibility as enum ('all','accepted');
+  create type member_status    as enum ('requested','accepted');
+  create type post_kind        as enum ('update','photo','checkin');
+exception when duplicate_object then null; end $$;
+
+-- ---------- tables ----------
+create table if not exists public.profiles (
+  id           uuid primary key references auth.users on delete cascade,
+  display_name text not null default 'Someone' check (char_length(display_name) between 1 and 40),
+  created_at   timestamptz not null default now()
+);
+
+-- photo from Google sign-in, and the categories someone picked as interests
+alter table public.profiles add column if not exists avatar_url text check (avatar_url is null or char_length(avatar_url) < 600);
+alter table public.profiles add column if not exists interests pulse_category[] not null default '{}';
+
+create table if not exists public.pulses (
+  id          uuid primary key default gen_random_uuid(),
+  host_id     uuid not null references public.profiles(id) on delete cascade,
+  category    pulse_category not null,
+  title       text not null check (char_length(title) between 3 and 80),
+  need        int  not null check (need between 1 and 30),
+  starts_at   timestamptz not null,
+  ends_at     timestamptz not null,
+  visibility  exact_visibility not null default 'all',
+  area_name   text not null default 'Nearby',
+  rough_lat   double precision not null,
+  rough_lng   double precision not null,
+  created_at  timestamptz not null default now(),
+  check (ends_at > starts_at)
+);
+create index if not exists pulses_geo_time on public.pulses (rough_lat, rough_lng, ends_at);
+create index if not exists pulses_created  on public.pulses (created_at desc);
+
+create table if not exists public.pulse_locations (
+  pulse_id   uuid primary key references public.pulses(id) on delete cascade,
+  lat        double precision not null,
+  lng        double precision not null,
+  place_name text not null
+);
+
+create table if not exists public.memberships (
+  pulse_id   uuid not null references public.pulses(id) on delete cascade,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  status     member_status not null,
+  created_at timestamptz not null default now(),
+  primary key (pulse_id, user_id)
+);
+
+create table if not exists public.feed_posts (
+  id         uuid primary key default gen_random_uuid(),
+  pulse_id   uuid not null references public.pulses(id) on delete cascade,
+  author_id  uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  kind       post_kind not null default 'update',
+  body       text check (body is null or char_length(body) <= 280),
+  photo_path text,
+  created_at timestamptz not null default now()
+);
+create index if not exists feed_posts_pulse on public.feed_posts (pulse_id, created_at desc);
+
+-- ---------- helpers ----------
+create or replace function public.can_see_exact(p_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from pulses p
+    where p.id = p_id
+      and ( p.visibility = 'all'
+         or p.host_id = auth.uid()
+         or exists (select 1 from memberships m
+                    where m.pulse_id = p.id and m.user_id = auth.uid() and m.status = 'accepted'))
+  );
+$$;
+
+create or replace function public.is_participant(p_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from pulses p
+    where p.id = p_id
+      and p.starts_at < now() + interval '30 minutes'     -- can post from 30 min before start
+      and p.ends_at   > now() - interval '3 hours'        -- ...until 3 h after the end (recap photos)
+      and ( p.host_id = auth.uid()
+         or exists (select 1 from memberships m
+                    where m.pulse_id = p.id and m.user_id = auth.uid() and m.status = 'accepted'))
+  );
+$$;
+
+-- ---------- row-level security ----------
+alter table public.profiles        enable row level security;
+alter table public.pulses          enable row level security;
+alter table public.pulse_locations enable row level security;
+alter table public.memberships     enable row level security;
+alter table public.feed_posts      enable row level security;
+
+drop policy if exists "profiles are public"   on public.profiles;
+drop policy if exists "insert own profile"    on public.profiles;
+drop policy if exists "update own profile"    on public.profiles;
+create policy "profiles are public" on public.profiles for select using (true);
+create policy "insert own profile"  on public.profiles for insert to authenticated with check (id = auth.uid());
+create policy "update own profile"  on public.profiles for update to authenticated using (id = auth.uid());
+
+drop policy if exists "pulses are public" on public.pulses;
+create policy "pulses are public" on public.pulses for select using (true);
+-- no insert/update/delete policies: writes only through the functions below
+
+drop policy if exists "exact spot for allowed viewers" on public.pulse_locations;
+create policy "exact spot for allowed viewers" on public.pulse_locations
+  for select using (public.can_see_exact(pulse_id));
+
+drop policy if exists "memberships are public" on public.memberships;
+create policy "memberships are public" on public.memberships for select using (true);
+
+drop policy if exists "feed is public"            on public.feed_posts;
+drop policy if exists "participants post"         on public.feed_posts;
+drop policy if exists "authors delete own posts"  on public.feed_posts;
+create policy "feed is public"           on public.feed_posts for select using (true);
+create policy "participants post"        on public.feed_posts for insert to authenticated
+  with check (author_id = auth.uid() and public.is_participant(pulse_id));
+create policy "authors delete own posts" on public.feed_posts for delete to authenticated
+  using (author_id = auth.uid());
+
+-- ---------- actions ----------
+create or replace function public.create_pulse(
+  p_category pulse_category, p_title text, p_need int,
+  p_starts_at timestamptz, p_duration_min int, p_visibility exact_visibility,
+  p_lat double precision, p_lng double precision, p_place text, p_area text
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); v_id uuid; v_start timestamptz;
+begin
+  if v_uid is null then raise exception 'Sign in first'; end if;
+  if p_starts_at > now() + interval '3 hours' then raise exception 'Pulses start within the next 3 hours'; end if;
+  if p_duration_min not between 15 and 360 then raise exception 'Duration must be 15 min to 6 h'; end if;
+  if (select count(*) from pulses where host_id = v_uid and ends_at > now()) >= 3 then
+    raise exception 'You already have 3 active Pulses. End one first.';
+  end if;
+  insert into profiles (id) values (v_uid) on conflict do nothing;
+  v_start := greatest(p_starts_at, now());
+  insert into pulses (host_id, category, title, need, starts_at, ends_at, visibility, area_name, rough_lat, rough_lng)
+  values (v_uid, p_category, trim(p_title), p_need, v_start, v_start + make_interval(mins => p_duration_min),
+          p_visibility, coalesce(nullif(trim(p_area), ''), 'Nearby'),
+          floor(p_lat / 0.003) * 0.003 + 0.0015,
+          floor(p_lng / 0.003) * 0.003 + 0.0015)
+  returning id into v_id;
+  insert into pulse_locations (pulse_id, lat, lng, place_name)
+  values (v_id, p_lat, p_lng, coalesce(nullif(trim(p_place), ''), nullif(trim(p_area), ''), 'Pinned spot'));
+  return v_id;
+end $$;
+
+create or replace function public.join_pulse(p_id uuid) returns text
+language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); p pulses; n int; v_status member_status;
+begin
+  if v_uid is null then raise exception 'Sign in first'; end if;
+  select * into p from pulses where id = p_id for update;
+  if not found then raise exception 'Pulse not found'; end if;
+  if p.ends_at <= now() then raise exception 'This Pulse has ended'; end if;
+  if p.host_id = v_uid then raise exception 'You are hosting this one'; end if;
+  select count(*) into n from memberships where pulse_id = p_id and status = 'accepted';
+  if n >= p.need then raise exception 'This Pulse is full'; end if;
+  v_status := case when p.visibility = 'all' then 'accepted'::member_status else 'requested'::member_status end;
+  insert into profiles (id) values (v_uid) on conflict do nothing;
+  insert into memberships (pulse_id, user_id, status) values (p_id, v_uid, v_status)
+  on conflict (pulse_id, user_id) do nothing;
+  return v_status::text;
+end $$;
+
+create or replace function public.leave_pulse(p_id uuid) returns void
+language sql security definer set search_path = public as $$
+  delete from memberships where pulse_id = p_id and user_id = auth.uid();
+$$;
+
+create or replace function public.respond_request(p_id uuid, p_user uuid, p_accept boolean) returns void
+language plpgsql security definer set search_path = public as $$
+declare p pulses; n int;
+begin
+  select * into p from pulses where id = p_id for update;
+  if not found or p.host_id <> auth.uid() then raise exception 'Only the host can do that'; end if;
+  if p_accept then
+    select count(*) into n from memberships where pulse_id = p_id and status = 'accepted';
+    if n >= p.need then raise exception 'This Pulse is already full'; end if;
+    update memberships set status = 'accepted' where pulse_id = p_id and user_id = p_user;
+  else
+    delete from memberships where pulse_id = p_id and user_id = p_user and status = 'requested';
+  end if;
+end $$;
+
+create or replace function public.end_pulse(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  update pulses set ends_at = greatest(now(), starts_at + interval '1 minute')
+  where id = p_id and host_id = auth.uid() and ends_at > now();
+end $$;
+
+revoke all on function public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text) from public, anon;
+revoke all on function public.join_pulse(uuid)               from public, anon;
+revoke all on function public.leave_pulse(uuid)              from public, anon;
+revoke all on function public.respond_request(uuid,uuid,boolean) from public, anon;
+revoke all on function public.end_pulse(uuid)                from public, anon;
+grant execute on function public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text) to authenticated;
+grant execute on function public.join_pulse(uuid)               to authenticated;
+grant execute on function public.leave_pulse(uuid)              to authenticated;
+grant execute on function public.respond_request(uuid,uuid,boolean) to authenticated;
+grant execute on function public.end_pulse(uuid)                to authenticated;
+
+-- ---------- photo storage ----------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('feed-photos', 'feed-photos', true, 3145728, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do nothing;
+
+drop policy if exists "upload into own folder" on storage.objects;
+create policy "upload into own folder" on storage.objects for insert to authenticated
+  with check (bucket_id = 'feed-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ---------- realtime ----------
+do $$ begin
+  alter publication supabase_realtime add table public.pulses, public.memberships, public.feed_posts;
+exception when duplicate_object then null; end $$;
