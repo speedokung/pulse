@@ -2,7 +2,7 @@
 import type { Pulse } from "./types";
 import { CATS } from "./categories";
 import { accepted, DAY, HOUR, isOver, ms, openSpots, status } from "./pulse";
-import { ago, clock } from "./format";
+import { ago, dayClock } from "./format";
 
 export type Lang = "en" | "th";
 export const appUrl = () => window.location.origin + window.location.pathname;
@@ -14,8 +14,8 @@ export function pulseCaption(p: Pulse, lang: Lang): string {
   if (isOver(p)) return recapCaption(p, lang);
   const o = openSpots(p), st = status(p), c = CATS[p.category];
   if (lang === "th")
-    return `${c.emoji} ${p.title}\n${st.k === "live" ? "กำลังเล่นอยู่ตอนนี้" : `เริ่ม ${clock(p.starts_at)} น.`} · ${where(p).replace("around ", "แถว")}\n${o > 0 ? `ขาดอีก ${o} คน ว่างมาจอยกันได้เลย 👉` : "รอบนี้เต็มแล้ว ดูกิจกรรมอื่นใกล้ๆ 👉"} ${linkFor(p)}\n#Pulse #หาเพื่อน${c.th}`;
-  return `${c.emoji} ${p.title}\n${st.k === "live" ? "Happening now" : `Starts ${clock(p.starts_at)}`} · ${where(p)}\n${o > 0 ? `Need ${o} more. Tap to join:` : "Full this time. See what else is on:"} ${linkFor(p)}\n#Pulse #${c.tag}`;
+    return `${c.emoji} ${p.title}\n${st.k === "live" ? "กำลังเล่นอยู่ตอนนี้" : `เริ่ม ${dayClock(p.starts_at).replace("tomorrow", "พรุ่งนี้")} น.`} · ${where(p).replace("around ", "แถว")}\n${o > 0 ? `ขาดอีก ${o} คน ว่างมาจอยกันได้เลย 👉` : "รอบนี้เต็มแล้ว ดูกิจกรรมอื่นใกล้ๆ 👉"} ${linkFor(p)}\n#Pulse #หาเพื่อน${c.th}`;
+  return `${c.emoji} ${p.title}\n${st.k === "live" ? "Happening now" : `Starts ${dayClock(p.starts_at)}`} · ${where(p)}\n${o > 0 ? `Need ${o} more. Tap to join:` : "Full this time. See what else is on:"} ${linkFor(p)}\n#Pulse #${c.tag}`;
 }
 
 export function recapCaption(p: Pulse, lang: Lang): string {
@@ -33,7 +33,7 @@ export function nowPost(list: Pulse[], lang: Lang): string {
     return lang === "th" ? `ตอนนี้ยังไม่มีใครปักหมุดแถวนี้ เป็นคนแรกเลยไหม? 👉 ${appUrl()}` : `Nothing open nearby right now. Be the first to start something: ${appUrl()}`;
   const lines = open.map((p) => {
     const s = status(p);
-    const when = s.k === "live" ? (lang === "th" ? "ตอนนี้" : "now") : clock(p.starts_at);
+    const when = s.k === "live" ? (lang === "th" ? "ตอนนี้" : "now") : dayClock(p.starts_at);
     return `${CATS[p.category].emoji} ${p.title} · ${when} · ${p.area_name} · ${lang === "th" ? "ขาด" : "need"} ${openSpots(p)}`;
   });
   return lang === "th"

@@ -4,20 +4,26 @@ import { distanceM } from "../lib/geo";
 import { PulseCard } from "./PulseCard";
 import type { Actions } from "./ui";
 
+/** Everything coming up within range: live first, then by start time. */
 export function nearbyList(pulses: Pulse[], me: LatLng, radiusM: number, uid: string | null) {
   const now = Date.now();
   return pulses
-    .filter((p) => !isOver(p, now) && ms(p.starts_at) - now <= 3 * HOUR && (distanceM(me, pos(p)) <= radiusM || isHost(p, uid)))
+    .filter((p) => !isOver(p, now) && (distanceM(me, pos(p)) <= radiusM || isHost(p, uid)))
     .sort((a, b) => Math.max(ms(a.starts_at), now) - Math.max(ms(b.starts_at), now) || distanceM(me, pos(a)) - distanceM(me, pos(b)));
 }
 
+const endOfDay = (offsetDays: number) => { const d = new Date(); d.setHours(23, 59, 59, 999); d.setDate(d.getDate() + offsetDays); return d.getTime(); };
+
 export function NearbyTab({ list, uid, me, selectedId, a }: { list: Pulse[]; uid: string | null; me: LatLng; selectedId: string | null; a: Actions }) {
-  if (!list.length) return <div className="empty">Nothing in range in the next 3 hours.<br />Widen the distance, or drop your own Pulse.</div>;
+  if (!list.length) return <div className="empty">Nothing coming up in range.<br />Widen the distance, or drop your own Pulse.</div>;
   const used = new Set<string>();
   const groups: [string, (p: Pulse) => boolean][] = [
     ["Live now", (p) => status(p).k === "live"],
     ["Within the hour", (p) => ms(p.starts_at) - Date.now() <= HOUR],
-    ["Later", () => true],
+    ["Next 3 hours", (p) => ms(p.starts_at) - Date.now() <= 3 * HOUR],
+    ["Later today", (p) => ms(p.starts_at) <= endOfDay(0)],
+    ["Tomorrow", (p) => ms(p.starts_at) <= endOfDay(1)],
+    ["This week", () => true],
   ];
   return (
     <>

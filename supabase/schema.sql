@@ -144,10 +144,11 @@ language plpgsql security definer set search_path = public as $$
 declare v_uid uuid := auth.uid(); v_id uuid; v_start timestamptz;
 begin
   if v_uid is null then raise exception 'Sign in first'; end if;
-  if p_starts_at > now() + interval '3 hours' then raise exception 'Pulses start within the next 3 hours'; end if;
-  if p_duration_min not between 15 and 360 then raise exception 'Duration must be 15 min to 6 h'; end if;
-  if (select count(*) from pulses where host_id = v_uid and ends_at > now()) >= 3 then
-    raise exception 'You already have 3 active Pulses. End one first.';
+  if p_starts_at > now() + interval '7 days' then raise exception 'Pick a start within the next 7 days'; end if;
+  if p_starts_at < now() - interval '10 minutes' then raise exception 'That start time has passed'; end if;
+  if p_duration_min not between 15 and 720 then raise exception 'Duration must be 15 min to 12 h'; end if;
+  if (select count(*) from pulses where host_id = v_uid and ends_at > now()) >= 5 then
+    raise exception 'You already have 5 upcoming Pulses. End one first.';
   end if;
   insert into profiles (id) values (v_uid) on conflict do nothing;
   v_start := greatest(p_starts_at, now());
@@ -200,9 +201,26 @@ begin
   end if;
 end $$;
 
+-- host adds time while it's on (or before it starts); a Pulse can run at most 12 h in total
+create or replace function public.extend_pulse(p_id uuid, p_minutes int) returns void
+language plpgsql security definer set search_path = public as $$
+declare p pulses;
+begin
+  if p_minutes not between 5 and 240 then raise exception 'Extend by 5 min to 4 h'; end if;
+  select * into p from pulses where id = p_id for update;
+  if not found or p.host_id <> auth.uid() then raise exception 'Only the host can do that'; end if;
+  if p.ends_at <= now() then raise exception 'This Pulse has already ended'; end if;
+  if p.ends_at + make_interval(mins => p_minutes) > p.starts_at + interval '12 hours' then
+    raise exception 'A Pulse can run for 12 hours at most';
+  end if;
+  update pulses set ends_at = ends_at + make_interval(mins => p_minutes) where id = p_id;
+end $$;
+
 create or replace function public.end_pulse(p_id uuid) returns void
 language plpgsql security definer set search_path = public as $$
 begin
+  -- not started yet: cancel it outright (it never happened, so it doesn't become history)
+  delete from pulses where id = p_id and host_id = auth.uid() and starts_at > now();
   update pulses set ends_at = greatest(now(), starts_at + interval '1 minute')
   where id = p_id and host_id = auth.uid() and ends_at > now();
 end $$;
@@ -212,11 +230,13 @@ revoke all on function public.join_pulse(uuid)               from public, anon;
 revoke all on function public.leave_pulse(uuid)              from public, anon;
 revoke all on function public.respond_request(uuid,uuid,boolean) from public, anon;
 revoke all on function public.end_pulse(uuid)                from public, anon;
+revoke all on function public.extend_pulse(uuid,int)          from public, anon;
 grant execute on function public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text) to authenticated;
 grant execute on function public.join_pulse(uuid)               to authenticated;
 grant execute on function public.leave_pulse(uuid)              to authenticated;
 grant execute on function public.respond_request(uuid,uuid,boolean) to authenticated;
 grant execute on function public.end_pulse(uuid)                to authenticated;
+grant execute on function public.extend_pulse(uuid,int)          to authenticated;
 
 -- ---------- photo storage ----------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

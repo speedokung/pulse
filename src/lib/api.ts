@@ -88,6 +88,10 @@ export async function respondRequest(id: string, user: string, accept: boolean) 
   if (!configured) return demo.demoRespond(id, user, accept);
   const { error } = await supabase.rpc("respond_request", { p_id: id, p_user: user, p_accept: accept }); if (error) throw error;
 }
+export async function extendPulse(id: string, minutes: number) {
+  if (!configured) return demo.demoExtend(id, minutes);
+  const { error } = await supabase.rpc("extend_pulse", { p_id: id, p_minutes: minutes }); if (error) throw error;
+}
 export async function endPulse(id: string) {
   if (!configured) return demo.demoEnd(id);
   const { error } = await supabase.rpc("end_pulse", { p_id: id }); if (error) throw error;

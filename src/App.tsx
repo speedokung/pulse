@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Category, LatLng, Pulse } from "./lib/types";
 import { CAT_KEYS, CATS, RADII, RadiusKey } from "./lib/categories";
 import { configured } from "./lib/supabase";
-import { createPulse, endPulse, errText, joinPulse, leavePulse, postToFeed, respondRequest, searchHistory } from "./lib/api";
+import { createPulse, endPulse, extendPulse, errText, joinPulse, leavePulse, postToFeed, respondRequest, searchHistory } from "./lib/api";
 import { isOver, pos, status } from "./lib/pulse";
 import type { Lang } from "./lib/captions";
 import { prefs, useLiveData, useLocation, useTick } from "./hooks";
@@ -34,7 +34,7 @@ export default function App() {
   const [showPast, setShowPast] = useState(true);
   const [sel, setSel] = useState<string | null>(null);
   const [placing, setPlacing] = useState<null | "pin" | "me">(null);
-  const [drop, setDrop] = useState<{ pin: LatLng; prefill: DropPrefill | null } | null>(null);
+  const [drop, setDrop] = useState<{ pin: LatLng; prefill: DropPrefill | null; k: number } | null>(null);
   const [share, setShare] = useState<Pulse | "poster" | null>(null);
   const [lang, setLangState] = useState<Lang>(() => prefs.read("lang", "en"));
   const [profileOpen, setProfileOpen] = useState<null | { reason: string | null }>(null);
@@ -122,12 +122,13 @@ export default function App() {
       run(async () => { const st = await joinPulse(p.id); toast(st === "accepted" ? `You're in. ${p.exact ? "See you at " + p.exact.place_name + "." : ""}` : `Request sent to ${p.host?.display_name || "the host"}.`); }); },
     leave: (p) => { run(() => leavePulse(p.id), `Left “${p.title}”`); },
     respond: (p, user, ok) => { run(() => respondRequest(p.id, user, ok), ok ? "Accepted. They can see the exact spot now." : "Declined."); },
-    end: (p) => { run(() => endPulse(p.id), "Ended. It stays on the map as history."); },
+    end: (p) => { const later = status(p).k === "soon"; if (later) setSel(null); run(() => endPulse(p.id), later ? "Cancelled." : "Ended. It stays on the map as history."); },
+    extend: (p, m) => { run(() => extendPulse(p.id, m), `Extended by ${m} min.`); },
     share: (p) => setShare(p),
     again: (p) => {
       const ll = p.exact ? { lat: p.exact.lat, lng: p.exact.lng } : { lat: p.rough_lat, lng: p.rough_lng };
       setSel(null); setTab(window.innerWidth < 820 ? "map" : "near");
-      setDrop({ pin: ll, prefill: { title: p.title, category: p.category, need: p.need, place: p.exact?.place_name ?? "" } });
+      setDrop({ pin: ll, prefill: { title: p.title, category: p.category, need: p.need, place: p.exact?.place_name ?? "" }, k: Date.now() });
       setCenterOn({ ll, k: Date.now() });
     },
     post: async (p, kind, body, file) => {
@@ -136,7 +137,7 @@ export default function App() {
     },
   };
 
-  const openDrop = () => { if (needName("People nearby see who is hosting. Pick a name, or use your Google account.")) return; setSel(null); setDrop({ pin: loc.me, prefill: null }); if (window.innerWidth < 820) setTab("map"); };
+  const openDrop = () => { if (needName("People nearby see who is hosting. Pick a name, or use your Google account.")) return; setSel(null); setDrop({ pin: loc.me, prefill: null, k: Date.now() }); if (window.innerWidth < 820) setTab("map"); };
   const onPick = (ll: LatLng) => {
     if (placing === "me") { loc.setManual(ll); setPlacing(null); toast("Your spot is set. Distances are measured from here."); return; }
     if (drop) { setDrop({ ...drop, pin: ll }); setPlacing(null); }
@@ -144,13 +145,14 @@ export default function App() {
   const submitDrop = async (np: Parameters<typeof createPulse>[0]) => {
     try {
       const id = await createPulse(np);
-      setDrop(null); toast("Your Pulse is live. People nearby can see it now."); await data.reload(); setSel(id);
+      setDrop(null); toast(np.startInMin <= 1 ? "Your Pulse is live. People nearby can see it now." : "Posted. People nearby can see it and join ahead of time."); await data.reload(); setSel(id);
       return true;
     } catch (e) { toast(errText(e)); return false; }
   };
 
   const live = near.filter((p) => status(p).k === "live").length;
-  const summary = panelTab === "near" ? `${near.length} Pulses in the next 3 hours · ${live} live now`
+  const soon3 = near.filter((p) => status(p).k === "soon" && new Date(p.starts_at).getTime() - Date.now() <= 3 * 3_600_000).length;
+  const summary = panelTab === "near" ? `${live} live now · ${soon3} in the next 3 hours · ${near.length - live - soon3} later`
     : panelTab === "feed" ? "Updates, photos and check-ins from activities around you"
     : panelTab === "hist" ? `${histList.length} past Pulses` : "Free ways to spread Pulse, written from what's on the map";
 
@@ -174,8 +176,8 @@ export default function App() {
         {placing && <div className="placehint">{placing === "me" ? "Tap where you are" : "Tap where it's happening"} <button onClick={() => setPlacing(null)}>Cancel</button></div>}
         {selected && !drop && <PulseDetail p={selected} uid={uid} me={loc.me} posts={data.posts} a={a} />}
         {!drop && !placing && <button className="fab" onClick={openDrop}><span className="ring" />Drop a Pulse</button>}
-        {drop && !placing && (
-          <DropPulse pin={drop.pin} me={loc.me} prefill={drop.prefill} onMovePin={() => setPlacing("pin")} onPin={(ll) => { setDrop((d) => (d ? { ...d, pin: ll } : d)); setCenterOn({ ll, k: Date.now() }); }} onCancel={() => setDrop(null)} onSubmit={submitDrop} />
+        {drop && (
+          <DropPulse key={drop.k} hidden={!!placing} pin={drop.pin} me={loc.me} prefill={drop.prefill} onMovePin={() => setPlacing("pin")} onPin={(ll) => { setDrop((d) => (d ? { ...d, pin: ll } : d)); setCenterOn({ ll, k: Date.now() }); }} onCancel={() => setDrop(null)} onSubmit={submitDrop} />
         )}
       </div>
 

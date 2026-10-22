@@ -1,6 +1,6 @@
 import type { FeedPost, LatLng, Pulse } from "../lib/types";
 import { CATS } from "../lib/categories";
-import { accepted, isHost, isOver, isParticipant, myStatus, pos, showsExact } from "../lib/pulse";
+import { accepted, isHost, isOver, isParticipant, myStatus, pos, showsExact, status } from "../lib/pulse";
 import { distanceM } from "../lib/geo";
 import { dist, walkMin } from "../lib/format";
 import { Actions, Avatar, by, JoinButton, Lock, NavButton, Place, Seats, When } from "./ui";
@@ -58,7 +58,7 @@ export function PulseDetail({ p, uid, me, posts, a }: { p: Pulse; uid: string | 
             </div>
           )}
           <div className="cfoot"><span className="meta">Exact spot: {p.visibility === "all" ? "everyone" : "accepted only"}</span>
-            <button className="mini" onClick={() => a.end(p)}>End now</button></div>
+            <div className="btnrow"><button className="mini" onClick={() => a.extend(p, 30)}>+30 min</button><button className="mini" onClick={() => a.end(p)}>{status(p).k === "live" ? "End now" : "Cancel"}</button></div></div>
         </>
       )}
 

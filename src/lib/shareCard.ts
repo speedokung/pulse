@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import type { Pulse } from "./types";
 import { CATS } from "./categories";
 import { accepted, isOver, openSpots, status } from "./pulse";
-import { ago, clock } from "./format";
+import { ago, dayClock } from "./format";
 import { appUrl, linkFor } from "./captions";
 
 const FD = '"Bricolage Grotesque","Noto Sans Thai",sans-serif';
@@ -57,7 +57,7 @@ export async function drawCard(p: Pulse): Promise<HTMLCanvasElement> {
   let y = 420 + tl.length * 112 + 40;
   ctx.font = `600 44px ${FB}`; ctx.fillStyle = "rgba(255,255,255,.92)";
   const n = accepted(p).length + 1;
-  ctx.fillText(past ? `${n} people met up · ${ago(p.ends_at)}` : st.k === "live" ? `Happening now · ${st.left} min left` : `Starts ${clock(p.starts_at)}`, 80, y);
+  ctx.fillText(past ? `${n} people met up · ${ago(p.ends_at)}` : st.k === "live" ? `Happening now · ${st.left} min left` : `Starts ${dayClock(p.starts_at)}`, 80, y);
   y += 62;
   const place = !past && p.visibility === "all" && p.exact ? p.exact.place_name : `Around ${p.area_name}`;
   wrap(ctx, place, W - 160).slice(0, 2).forEach((l) => { ctx.fillText(l, 80, y); y += 58; });

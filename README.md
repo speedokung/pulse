@@ -79,6 +79,7 @@ Joining, accepting, declining and ending all go through database functions (`joi
 
 - **Supabase free**: 500 MB database, 1 GB photo storage, and 200 concurrent realtime connections. Projects pause after a week with no activity (one click to resume). The Pro plan ($25/mo) removes the pause.
 - **OpenFreeMap** map tiles are free with no key. The simplified look lives in `src/lib/mapStyle.ts`, where you can change colours or which labels show. If you outgrow OpenFreeMap, set `VITE_MAP_STYLE` to another style URL; any style that isn't OpenMapTiles "positron" is used as-is, without the simplification.
+- **Place search** in the drop form uses free OpenStreetMap search (Photon, with Nominatim as backup). It's good for parks, malls, schools and landmarks, but weaker than Google for small shops. The public servers are shared, so at real scale switch `src/lib/places.ts` to MapTiler Geocoding (generous free tier) or self-host Photon. Google Places can't be used here unless the map is also switched to Google Maps, because Google requires Places results shown on a map to be on a Google Map.
 - **Area names** come from OpenStreetMap's free Nominatim service, called once per new Pulse. At real scale, switch to a paid geocoder (MapTiler, LocationIQ), because Nominatim asks for light use.
 
 ## Project map

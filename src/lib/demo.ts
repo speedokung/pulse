@@ -41,6 +41,7 @@ let pulses: Pulse[] = [
   P({ id: "ex-run", category: "outdoor", title: "Sunset run, easy 5 km pace", place: "Benjakitti Forest Park, skywalk entrance", area: "Benjakitti", host: "Nat", lat: 13.7296, lng: 100.5594, start: T + 55 * MIN, dur: 45, need: 5, joined: 2 }),
   P({ id: "ex-hoops", category: "sport", title: "3-on-3 basketball, half court", place: "Chula sports field court", area: "Pathum Wan", host: "Jay", lat: 13.7389, lng: 100.5266, start: T + 10 * MIN, dur: 60, need: 3, joined: 1 }),
   P({ id: "ex-futsal", category: "sport", title: "Futsal 5-a-side, short 3 players", place: "Siam futsal, court B", area: "Siam", host: "Arm", lat: 13.7466, lng: 100.5318, start: T + 130 * MIN, dur: 60, need: 3 }),
+  P({ id: "ex-boardnight", category: "games", title: "Board game night, beginners welcome", place: "Board game café, Samyan Mitrtown 2F", area: "Samyan", host: "Bee", lat: 13.7337, lng: 100.5287, start: new Date(new Date(T + DAY).setHours(19, 0, 0, 0)).getTime(), dur: 180, need: 6, joined: 2 }),
   P({ id: "ex-sketch", category: "make", title: "Sketching the flower market, all levels", place: "", area: "Pak Khlong Talat", host: "Ploy", lat: 13.7436, lng: 100.5003, start: T + 90 * MIN, dur: 90, need: 6, joined: 3, visibility: "accepted" }),
   // ended: history, buried under newer Pulses nearby
   P({ id: "ex-uke", category: "music", title: "Ukulele circle", place: "Lakeside lawn, Lumphini Park", area: "Lumphini", host: "Fon", lat: 13.7312, lng: 100.5418, start: T - DAY, dur: 60, need: 5, joined: 5 }),
@@ -101,7 +102,13 @@ export function demoRespond(id: string, user: string, ok: boolean) {
   else p.memberships = p.memberships.filter((m) => m.user_id !== user);
   emit();
 }
-export function demoEnd(id: string) { const p = find(id); p.ends_at = iso(Math.max(Date.now(), new Date(p.starts_at).getTime() + MIN)); emit(); }
+export function demoExtend(id: string, minutes: number) {
+  const p = find(id);
+  const end = new Date(p.ends_at).getTime() + minutes * MIN;
+  if (end > new Date(p.starts_at).getTime() + 12 * HOUR) throw new Error("A Pulse can run for 12 hours at most");
+  p.ends_at = iso(end); emit();
+}
+export function demoEnd(id: string) { const p = find(id); if (new Date(p.starts_at).getTime() > Date.now()) { pulses = pulses.filter((x) => x !== p); emit(); return; } p.ends_at = iso(Math.max(Date.now(), new Date(p.starts_at).getTime() + MIN)); emit(); }
 export function demoPost(pulse_id: string, kind: FeedPost["kind"], body: string | null, file: File | null) {
   posts.unshift({
     id: "fp-" + Date.now(), pulse_id, author_id: DEMO_UID, author: { display_name: "You" }, kind, body, photo_path: null,

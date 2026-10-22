@@ -257,3 +257,20 @@ label.f input, label.f select { padding: 10px 12px; border: 1px solid var(--line
   .maplibregl-ctrl-attrib { background: rgba(20, 29, 32, .8); color: var(--muted); }
   .maplibregl-ctrl-attrib a { color: var(--muted); }
 }
+
+/* ---------- drop form: where / when ---------- */
+.sheet[hidden] { display: none; }
+.group { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 0; display: grid; gap: 10px; min-width: 0; }
+.group legend { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; padding: 0 4px; }
+.group .chip { font-size: 13px; }
+.searchbox { position: relative; }
+.searchbox input { width: 100%; padding: 10px 36px 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font-size: 15px; }
+.spin { position: absolute; right: 12px; top: 13px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.hits { list-style: none; margin: 6px 0 0; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow); display: grid; gap: 2px; }
+.hits button { width: 100%; text-align: left; border: none; background: none; padding: 8px 10px; border-radius: 8px; display: grid; gap: 2px; }
+.hits button:hover, .hits button:focus-visible { background: var(--bg); }
+.hits b { font-weight: 600; font-size: 14px; }
+.hits span { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.where.err { color: #d9480f; }
+label.f input[type="datetime-local"], label.f input[type="time"] { min-height: 42px; }

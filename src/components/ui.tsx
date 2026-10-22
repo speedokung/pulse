@@ -1,7 +1,7 @@
 import type { FeedPost, Pulse } from "../lib/types";
 import { CATS } from "../lib/categories";
 import { accepted, hostName, isHost, isOver, myStatus, openSpots, placeLabel, showsExact, status } from "../lib/pulse";
-import { ago, clock } from "../lib/format";
+import { ago, dayClock, span } from "../lib/format";
 import { googleNavUrl } from "../lib/geo";
 
 export interface Actions {
@@ -10,6 +10,7 @@ export interface Actions {
   leave: (p: Pulse) => void;
   respond: (p: Pulse, user: string, accept: boolean) => void;
   end: (p: Pulse) => void;
+  extend: (p: Pulse, minutes: number) => void;
   share: (p: Pulse) => void;
   again: (p: Pulse) => void;
   post: (p: Pulse, kind: FeedPost["kind"], body: string | null, file: File | null) => Promise<boolean>;
@@ -30,7 +31,7 @@ export function When({ p }: { p: Pulse }) {
   const st = status(p);
   if (st.k === "over") return <span>Ended {ago(p.ends_at)}</span>;
   if (st.k === "live") return <span className="live">● Live · {st.left} min left</span>;
-  return <span>Starts {clock(p.starts_at)} · in {st.in} min</span>;
+  return <span>Starts {dayClock(p.starts_at)}{st.in <= 180 ? ` · in ${st.in < 60 ? `${st.in} min` : span(st.in)}` : ""}</span>;
 }
 
 export function Place({ p }: { p: Pulse }) {
