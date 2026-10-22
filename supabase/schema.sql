@@ -238,6 +238,59 @@ grant execute on function public.respond_request(uuid,uuid,boolean) to authentic
 grant execute on function public.end_pulse(uuid)                to authenticated;
 grant execute on function public.extend_pulse(uuid,int)          to authenticated;
 
+-- ---------- contact + group chat (only the host and accepted people) ----------
+create or replace function public.is_member(p_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from pulses p
+    where p.id = p_id
+      and ( p.host_id = auth.uid()
+         or exists (select 1 from memberships m
+                    where m.pulse_id = p.id and m.user_id = auth.uid() and m.status = 'accepted'))
+  );
+$$;
+
+create table if not exists public.pulse_private (
+  pulse_id uuid primary key references public.pulses(id) on delete cascade,
+  line_id  text check (line_id  is null or char_length(line_id)  <= 40),
+  phone    text check (phone    is null or char_length(phone)    <= 20),
+  landmark text check (landmark is null or char_length(landmark) <= 120)
+);
+alter table public.pulse_private enable row level security;
+drop policy if exists "contact for members" on public.pulse_private;
+create policy "contact for members" on public.pulse_private for select using (public.is_member(pulse_id));
+
+create or replace function public.set_pulse_contact(p_id uuid, p_line text, p_phone text, p_landmark text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from pulses where id = p_id and host_id = auth.uid()) then raise exception 'Only the host can do that'; end if;
+  insert into pulse_private (pulse_id, line_id, phone, landmark)
+  values (p_id, nullif(trim(p_line), ''), nullif(trim(p_phone), ''), nullif(trim(p_landmark), ''))
+  on conflict (pulse_id) do update set line_id = excluded.line_id, phone = excluded.phone, landmark = excluded.landmark;
+end $$;
+revoke all on function public.set_pulse_contact(uuid,text,text,text) from public, anon;
+grant execute on function public.set_pulse_contact(uuid,text,text,text) to authenticated;
+
+create table if not exists public.pulse_messages (
+  id         uuid primary key default gen_random_uuid(),
+  pulse_id   uuid not null references public.pulses(id) on delete cascade,
+  author_id  uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  body       text not null check (char_length(body) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+create index if not exists pulse_messages_pulse on public.pulse_messages (pulse_id, created_at);
+alter table public.pulse_messages enable row level security;
+drop policy if exists "members read chat" on public.pulse_messages;
+drop policy if exists "members write chat" on public.pulse_messages;
+create policy "members read chat" on public.pulse_messages for select using (public.is_member(pulse_id));
+create policy "members write chat" on public.pulse_messages for insert to authenticated
+  with check (author_id = auth.uid() and public.is_member(pulse_id)
+              and exists (select 1 from pulses p where p.id = pulse_id and p.ends_at > now() - interval '6 hours'));
+
+do $$ begin
+  alter publication supabase_realtime add table public.pulse_messages;
+exception when duplicate_object then null; end $$;
+
 -- ---------- photo storage ----------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('feed-photos', 'feed-photos', true, 3145728, array['image/jpeg','image/png','image/webp'])

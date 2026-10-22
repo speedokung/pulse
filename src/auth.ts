@@ -7,6 +7,7 @@ import type { Category, MyProfile } from "./lib/types";
 import { configured, supabase } from "./lib/supabase";
 import { DEMO_UID } from "./lib/demo";
 import { errText } from "./lib/api";
+import { t } from "./lib/i18n";
 
 const SWITCH_FLAG = "pulse.googleSwitch";
 
@@ -29,7 +30,7 @@ const returnUrl = () => location.origin + location.pathname + location.search;
 export function useAuth(): Auth {
   const [ready, setReady] = useState(!configured);
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<MyProfile | null>(configured ? null : { display_name: "You", avatar_url: null, interests: [] });
+  const [profile, setProfile] = useState<MyProfile | null>(configured ? null : { display_name: "", avatar_url: null, interests: [] });
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const applied = useRef<string>("");
@@ -92,13 +93,13 @@ export function useAuth(): Auth {
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       // supabase-js asks callers not to await other auth calls inside this callback
       if (session?.user && (event === "SIGNED_IN" || event === "USER_UPDATED")) setTimeout(() => apply(session.user), 0);
-      if (event === "USER_UPDATED" && session?.user && hasGoogle(session.user)) setNotice("Signed in with Google. Your Pulses are saved to your account.");
+      if (event === "USER_UPDATED" && session?.user && hasGoogle(session.user)) setNotice(t("tGoogleOk"));
     });
     return () => { dead = true; sub.subscription.unsubscribe(); };
   }, [apply]);
 
   const signInWithGoogle = useCallback(async () => {
-    if (!configured) throw new Error("Google sign-in works once Supabase is connected (see README).");
+    if (!configured) throw new Error(t("pfGoogleOff"));
     const { data: { user: u } } = await supabase.auth.getUser();
     if (u?.is_anonymous) {
       // keep everything the guest already did

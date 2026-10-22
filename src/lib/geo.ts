@@ -1,4 +1,5 @@
 import type { LatLng } from "./types";
+import { getLang } from "./i18n";
 
 export function distanceM(a: LatLng, b: LatLng): number {
   const R = 6371000, toR = Math.PI / 180;
@@ -49,14 +50,14 @@ export async function areaName(ll: LatLng): Promise<string> {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 4000);
     const r = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&accept-language=en&lat=${ll.lat}&lon=${ll.lng}`,
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&accept-language=${getLang() === "th" ? "th" : "en"}&lat=${ll.lat}&lon=${ll.lng}`,
       { signal: ctl.signal },
     );
     clearTimeout(t);
     const j = await r.json();
     const a = j.address || {};
-    return a.park || a.suburb || a.neighbourhood || a.quarter || a.city_district || a.road || "Nearby";
+    return a.park || a.suburb || a.neighbourhood || a.quarter || a.city_district || a.road || (getLang() === "th" ? "นี้" : "Nearby");
   } catch {
-    return "Nearby";
+    return getLang() === "th" ? "นี้" : "Nearby";
   }
 }

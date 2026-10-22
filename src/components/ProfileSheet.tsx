@@ -1,9 +1,10 @@
 import { useState } from "react";
 import type { Category } from "../lib/types";
-import { CAT_KEYS, CATS } from "../lib/categories";
+import { CAT_KEYS, CATS, catName } from "../lib/categories";
 import { configured } from "../lib/supabase";
 import type { Auth } from "../auth";
 import { Avatar } from "./ui";
+import { t } from "../lib/i18n";
 
 const G = () => (
   <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
@@ -25,13 +26,13 @@ export function ProfileSheet({ auth, reason, onClose, toast }: { auth: Auth; rea
 
   const google = async () => {
     try { setBusy(true); await auth.signInWithGoogle(); }
-    catch (e) { setBusy(false); toast((e as Error).message || "Couldn't open Google sign-in."); }
+    catch (e) { setBusy(false); toast((e as Error).message || t("pfGoogleFail")); }
   };
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    try { setBusy(true); await auth.saveProfile({ display_name: name.trim(), interests }); toast("Profile saved."); onClose(); }
-    catch { toast("Couldn't save your profile. Try again."); }
+    try { setBusy(true); await auth.saveProfile({ display_name: name.trim(), interests }); toast(t("pfSaved")); onClose(); }
+    catch { toast(t("pfSaveFail")); }
     finally { setBusy(false); }
   };
 
@@ -39,39 +40,39 @@ export function ProfileSheet({ auth, reason, onClose, toast }: { auth: Auth; rea
     <div className="modal" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <form className="mbox profile" onSubmit={save} role="dialog" aria-modal="true" aria-labelledby="pf-h">
         <div className="pf-head">
-          <Avatar name={name || "You"} url={auth.profile?.avatar_url} size={52} />
+          <Avatar name={name || t("you")} url={auth.profile?.avatar_url} size={52} />
           <div>
-            <h3 id="pf-h">{reason ? "Quick intro first" : "Your profile"}</h3>
-            <div className="sub">{auth.isGuest ? "Guest · no account needed" : `Signed in with Google${auth.email ? ` · ${auth.email}` : ""}`}</div>
+            <h3 id="pf-h">{reason ? t("pfIntro") : t("pfTitle")}</h3>
+            <div className="sub">{auth.isGuest ? t("pfGuest") : `${t("pfGoogle")}${auth.email ? ` · ${auth.email}` : ""}`}</div>
           </div>
         </div>
         {reason && <div className="sub">{reason}</div>}
 
         {auth.isGuest && (
           <div className="pf-google">
-            <button type="button" className="gbtn" onClick={google} disabled={busy || !configured}><G />Continue with Google</button>
+            <button type="button" className="gbtn" onClick={google} disabled={busy || !configured}><G />{t("pfContinueG")}</button>
             <div className="sub">{configured
-              ? "Uses your Google name and photo, and keeps your Pulses on every device. Pulse never posts anything to Google."
-              : "Google sign-in turns on once the app is connected to Supabase."}</div>
-            <div className="or"><span>or just pick a name</span></div>
+              ? t("pfGoogleWhy")
+              : t("pfGoogleOff")}</div>
+            <div className="or"><span>{t("pfOr")}</span></div>
           </div>
         )}
 
-        <label className="f" htmlFor="pf-name">Name people see
-          <input id="pf-name" type="text" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nat" autoFocus={auth.isGuest ? undefined : true} />
+        <label className="f" htmlFor="pf-name">{t("pfName")}
+          <input id="pf-name" type="text" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("pfNamePh")} autoFocus={auth.isGuest ? undefined : true} />
         </label>
-        <div className="f-label">What are you into? <span className="sub">These show first on the map.</span></div>
+        <div className="f-label">{t("pfInto")} <span className="sub">{t("pfIntoSub")}</span></div>
         <div className="row">
           {CAT_KEYS.map((k) => (
             <button type="button" key={k} className="chip" aria-pressed={interests.includes(k)} onClick={() => toggle(k)}>
-              <i style={{ background: CATS[k].color }} />{CATS[k].name}
+              <i style={{ background: CATS[k].color }} />{catName(k)}
             </button>
           ))}
         </div>
         <div className="btns">
-          {!auth.isGuest && <button type="button" className="ghostbtn" onClick={async () => { await auth.signOut(); toast("Signed out. You're a guest now."); onClose(); }}>Sign out</button>}
-          <button type="button" className="ghostbtn" onClick={onClose}>{reason ? "Not now" : "Close"}</button>
-          <button type="submit" className="go" disabled={busy || !name.trim()}>{reason ? "Continue" : "Save"}</button>
+          {!auth.isGuest && <button type="button" className="ghostbtn" onClick={async () => { await auth.signOut(); toast(t("pfSignedOut")); onClose(); }}>{t("pfSignOut")}</button>}
+          <button type="button" className="ghostbtn" onClick={onClose}>{reason ? t("pfNotNow") : t("close")}</button>
+          <button type="submit" className="go" disabled={busy || !name.trim()}>{reason ? t("pfContinue") : t("pfSave")}</button>
         </div>
       </form>
     </div>

@@ -1,7 +1,8 @@
 // One data layer for both modes: Supabase when configured, the in-memory demo otherwise.
-import type { FeedPost, LatLng, MemberStatus, NewPulse, PostKind, Pulse } from "./types";
+import type { ChatMessage, Contact, FeedPost, LatLng, MemberStatus, NewPulse, PostKind, Pulse } from "./types";
 import { configured, supabase, PHOTO_BUCKET } from "./supabase";
 import * as demo from "./demo";
+import { getLang } from "./i18n";
 import { DAY, MIN } from "./pulse";
 
 const PULSE_SELECT = "*, host:profiles!pulses_host_id_fkey(display_name,avatar_url), memberships(user_id,status,profile:profiles(display_name,avatar_url))";
@@ -21,10 +22,18 @@ async function attachExact(list: Pulse[]): Promise<Pulse[]> {
     if (error) throw error;
     rows.push(...((data ?? []) as typeof rows));
   }
+  // host contact: RLS returns it only to the host and accepted people
+  const contacts: (Contact & { pulse_id: string })[] = [];
+  for (const ids of chunks(list.map((p) => p.id), 80)) {
+    const { data } = await supabase.from("pulse_private").select("pulse_id,line_id,phone,landmark").in("pulse_id", ids);
+    contacts.push(...((data ?? []) as typeof contacts));
+  }
   const m = new Map(rows.map((r) => [r.pulse_id, r]));
+  const c = new Map(contacts.map((r) => [r.pulse_id, r]));
   return list.map((p) => {
-    const r = m.get(p.id);
-    return { ...p, exact: r ? { lat: r.lat, lng: r.lng, place_name: r.place_name } : null };
+    const r = m.get(p.id), k = c.get(p.id);
+    return { ...p, exact: r ? { lat: r.lat, lng: r.lng, place_name: r.place_name } : null,
+      contact: k ? { line_id: k.line_id, phone: k.phone, landmark: k.landmark } : null };
   });
 }
 
@@ -72,8 +81,38 @@ export async function createPulse(np: NewPulse): Promise<string> {
     p_visibility: np.visibility, p_lat: np.lat, p_lng: np.lng, p_place: np.place, p_area: np.area,
   });
   if (error) throw error;
-  return data as string;
+  const id = data as string;
+  if (np.contact.line_id || np.contact.phone || np.contact.landmark) await setContact(id, np.contact);
+  return id;
 }
+export async function setContact(id: string, c: Contact) {
+  if (!configured) return demo.demoSetContact(id, c);
+  const { error } = await supabase.rpc("set_pulse_contact", { p_id: id, p_line: c.line_id ?? "", p_phone: c.phone ?? "", p_landmark: c.landmark ?? "" });
+  if (error) throw error;
+}
+
+// ---------- group chat (host + accepted people) ----------
+export async function loadMessages(pulseId: string): Promise<ChatMessage[]> {
+  if (!configured) return demo.demoMessages(pulseId);
+  const { data, error } = await supabase.from("pulse_messages")
+    .select("*, author:profiles!pulse_messages_author_id_fkey(display_name,avatar_url)")
+    .eq("pulse_id", pulseId).order("created_at", { ascending: true }).limit(200);
+  if (error) throw error;
+  return (data ?? []) as ChatMessage[];
+}
+export async function sendMessage(pulseId: string, body: string) {
+  if (!configured) return demo.demoSend(pulseId, body);
+  const { error } = await supabase.from("pulse_messages").insert({ pulse_id: pulseId, body });
+  if (error) throw error;
+}
+export function subscribeChat(pulseId: string, fn: () => void): () => void {
+  if (!configured) return demo.onDemoChange(fn);
+  const ch = supabase.channel(`chat-${pulseId}-${Math.random().toString(36).slice(2)}`)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "pulse_messages", filter: `pulse_id=eq.${pulseId}` }, fn)
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
 export async function joinPulse(id: string): Promise<MemberStatus> {
   if (!configured) return demo.demoJoin(id);
   const { data, error } = await supabase.rpc("join_pulse", { p_id: id });
@@ -137,7 +176,7 @@ export async function postToFeed(uid: string, pulseId: string, kind: PostKind, b
 /** Calls `fn` whenever Pulses, joins or feed posts change anywhere. */
 export function subscribe(fn: () => void): () => void {
   if (!configured) return demo.onDemoChange(fn);
-  const ch = supabase.channel("pulse-live")
+  const ch = supabase.channel(`pulse-live-${Math.random().toString(36).slice(2)}`)
     .on("postgres_changes", { event: "*", schema: "public", table: "pulses" }, fn)
     .on("postgres_changes", { event: "*", schema: "public", table: "memberships" }, fn)
     .on("postgres_changes", { event: "*", schema: "public", table: "feed_posts" }, fn)
@@ -146,5 +185,23 @@ export function subscribe(fn: () => void): () => void {
 }
 
 /** Friendly message from a Supabase / Postgres error. */
-export const errText = (e: unknown) =>
-  (e as { message?: string })?.message?.replace(/^.*?ERROR:\s*/, "") || "Something went wrong. Check your connection and try again.";
+const TH_ERRORS: [RegExp, string][] = [
+  [/is full|already full/i, "ก๊วนนี้เต็มแล้ว"],
+  [/has (already )?ended/i, "ก๊วนนี้จบไปแล้ว"],
+  [/sign in first|not signed in/i, "ต้องเข้าสู่ระบบก่อน"],
+  [/only the host/i, "เฉพาะเจ้าของก๊วนเท่านั้น"],
+  [/you are hosting/i, "คุณเป็นเจ้าของก๊วนนี้อยู่แล้ว"],
+  [/upcoming pulses|active pulses/i, "คุณมีก๊วนที่ยังไม่จบหลายก๊วนแล้ว จบหรือยกเลิกก๊วนเก่าก่อนนะ"],
+  [/12 hours/i, "ก๊วนหนึ่งเล่นได้ไม่เกิน 12 ชั่วโมง"],
+  [/start time has passed/i, "เวลาเริ่มผ่านไปแล้ว"],
+  [/within the next 7 days/i, "เลือกเวลาเริ่มภายใน 7 วันข้างหน้า"],
+  [/duration/i, "ระยะเวลาต้องอยู่ระหว่าง 15 นาทีถึง 12 ชั่วโมง"],
+  [/not found/i, "ไม่เจอก๊วนนี้ อาจถูกยกเลิกไปแล้ว"],
+  [/fetch|network/i, "เชื่อมต่อไม่ได้ ลองเช็กอินเทอร์เน็ตแล้วลองใหม่"],
+];
+/** Friendly message from a Supabase / Postgres error, in the app's language. */
+export const errText = (e: unknown) => {
+  const msg = (e as { message?: string })?.message?.replace(/^.*?ERROR:\s*/, "") || "";
+  if (getLang() === "th") return TH_ERRORS.find(([re]) => re.test(msg))?.[1] || "มีบางอย่างผิดพลาด ลองใหม่อีกครั้ง";
+  return msg || "Something went wrong. Check your connection and try again.";
+};

@@ -2,27 +2,29 @@
 import type { Pulse } from "./types";
 import { CATS } from "./categories";
 import { accepted, DAY, HOUR, isOver, ms, openSpots, status } from "./pulse";
-import { ago, dayClock } from "./format";
+import { ago, dayClock, inLang } from "./format";
 
-export type Lang = "en" | "th";
+import type { Lang } from "./i18n";
+export type { Lang };
 export const appUrl = () => window.location.origin + window.location.pathname;
 export const linkFor = (p?: Pulse) => appUrl() + (p ? `?p=${p.id}` : "");
 /** Public shares never reveal an accept-only spot. */
-const where = (p: Pulse) => (p.visibility === "all" && p.exact ? p.exact.place_name : `around ${p.area_name}`);
+const where = (p: Pulse, lang: Lang) => (p.visibility === "all" && p.exact ? p.exact.place_name : lang === "th" ? `แถว${p.area_name}` : `around ${p.area_name}`);
+const TAG = (lang: Lang) => (lang === "th" ? "#แถว" : "#Thaew");
 
 export function pulseCaption(p: Pulse, lang: Lang): string {
   if (isOver(p)) return recapCaption(p, lang);
   const o = openSpots(p), st = status(p), c = CATS[p.category];
   if (lang === "th")
-    return `${c.emoji} ${p.title}\n${st.k === "live" ? "กำลังเล่นอยู่ตอนนี้" : `เริ่ม ${dayClock(p.starts_at).replace("tomorrow", "พรุ่งนี้")} น.`} · ${where(p).replace("around ", "แถว")}\n${o > 0 ? `ขาดอีก ${o} คน ว่างมาจอยกันได้เลย 👉` : "รอบนี้เต็มแล้ว ดูกิจกรรมอื่นใกล้ๆ 👉"} ${linkFor(p)}\n#Pulse #หาเพื่อน${c.th}`;
-  return `${c.emoji} ${p.title}\n${st.k === "live" ? "Happening now" : `Starts ${dayClock(p.starts_at)}`} · ${where(p)}\n${o > 0 ? `Need ${o} more. Tap to join:` : "Full this time. See what else is on:"} ${linkFor(p)}\n#Pulse #${c.tag}`;
+    return `${c.emoji} ${p.title}\n${st.k === "live" ? "กำลังเล่นอยู่ตอนนี้" : `เริ่ม ${inLang("th", () => dayClock(p.starts_at))}`} · ${where(p, "th")}\n${o > 0 ? `ขาดอีก ${o} คน ว่างมาจอยกันได้เลย 👉` : "รอบนี้เต็มแล้ว ดูกิจกรรมอื่นใกล้ๆ 👉"} ${linkFor(p)}\n${TAG("th")} #หาเพื่อน${c.th}`;
+  return `${c.emoji} ${p.title}\n${st.k === "live" ? "Happening now" : `Starts ${inLang("en", () => dayClock(p.starts_at))}`} · ${where(p, "en")}\n${o > 0 ? `Need ${o} more. Tap to join:` : "Full this time. See what else is on:"} ${linkFor(p)}\n${TAG("en")} #${c.tag}`;
 }
 
 export function recapCaption(p: Pulse, lang: Lang): string {
   const n = accepted(p).length + 1;
   if (lang === "th")
-    return `${n} คนมาเจอกันจริงที่ “${p.title}” แถว ${p.area_name}\nรอบหน้าอยากเล่นด้วย กดดูกิจกรรมใกล้ตัวได้เลย 👉 ${linkFor(p)}\n#Pulse #หาเพื่อน${CATS[p.category].th}`;
-  return `${n} people met up for “${p.title}” around ${p.area_name} (${ago(p.ends_at)}).\nWant in next time? See what's on near you: ${linkFor(p)}\n#Pulse #${CATS[p.category].tag}`;
+    return `${n} คนมาเจอกันจริงที่ “${p.title}” แถว${p.area_name}\nรอบหน้าอยากเล่นด้วย กดดูกิจกรรมใกล้ตัวได้เลย 👉 ${linkFor(p)}\n${TAG("th")} #หาเพื่อน${CATS[p.category].th}`;
+  return `${n} people met up for “${p.title}” around ${p.area_name} (${inLang("en", () => ago(p.ends_at))}).\nWant in next time? See what's on near you: ${linkFor(p)}\n${TAG("en")} #${CATS[p.category].tag}`;
 }
 
 export function nowPost(list: Pulse[], lang: Lang): string {
@@ -33,7 +35,7 @@ export function nowPost(list: Pulse[], lang: Lang): string {
     return lang === "th" ? `ตอนนี้ยังไม่มีใครปักหมุดแถวนี้ เป็นคนแรกเลยไหม? 👉 ${appUrl()}` : `Nothing open nearby right now. Be the first to start something: ${appUrl()}`;
   const lines = open.map((p) => {
     const s = status(p);
-    const when = s.k === "live" ? (lang === "th" ? "ตอนนี้" : "now") : dayClock(p.starts_at);
+    const when = s.k === "live" ? (lang === "th" ? "ตอนนี้" : "now") : inLang(lang, () => dayClock(p.starts_at));
     return `${CATS[p.category].emoji} ${p.title} · ${when} · ${p.area_name} · ${lang === "th" ? "ขาด" : "need"} ${openSpots(p)}`;
   });
   return lang === "th"
@@ -53,6 +55,6 @@ export function weekPost(list: Pulse[], lang: Lang): string {
     .map(([k, v]) => (lang === "th" ? `${CATS[k as Pulse["category"]].th} ${v}` : `${v} ${CATS[k as Pulse["category"]].name.toLowerCase()}`)).join(", ");
   const top = Object.entries(byArea).sort((a, b) => b[1] - a[1])[0][0];
   return lang === "th"
-    ? `สัปดาห์นี้บน Pulse: ${wk.length} กิจกรรม ${people} คนออกมาเจอกันจริง\n(${cats})\nย่านที่คึกคักสุด: ${top}\nสัปดาห์หน้าจะเล่นอะไรดี 👉 ${appUrl()}`
-    : `This week on Pulse: ${wk.length} meetups, ${people} people showed up in real life.\n(${cats})\nBusiest spot: ${top}.\nWhat are you starting next week? ${appUrl()}`;
+    ? `สัปดาห์นี้บนแอป “แถว”: ${wk.length} กิจกรรม ${people} คนออกมาเจอกันจริง\n(${cats})\nย่านที่คึกคักสุด: ${top}\nสัปดาห์หน้าจะเล่นอะไรดี 👉 ${appUrl()}`
+    : `This week on Thaew: ${wk.length} meetups, ${people} people showed up in real life.\n(${cats})\nBusiest spot: ${top}.\nWhat are you starting next week? ${appUrl()}`;
 }

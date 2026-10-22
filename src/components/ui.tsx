@@ -1,5 +1,6 @@
-import type { FeedPost, Pulse } from "../lib/types";
-import { CATS } from "../lib/categories";
+import type { Contact, FeedPost, Pulse } from "../lib/types";
+import { CATS, catIcon } from "../lib/categories";
+import { t } from "../lib/i18n";
 import { accepted, hostName, isHost, isOver, myStatus, openSpots, placeLabel, showsExact, status } from "../lib/pulse";
 import { ago, dayClock, span } from "../lib/format";
 import { googleNavUrl } from "../lib/geo";
@@ -14,6 +15,8 @@ export interface Actions {
   share: (p: Pulse) => void;
   again: (p: Pulse) => void;
   post: (p: Pulse, kind: FeedPost["kind"], body: string | null, file: File | null) => Promise<boolean>;
+  chat: (p: Pulse, body: string) => Promise<boolean>;
+  saveContact: (p: Pulse, c: Contact) => Promise<boolean>;
 }
 
 export const Lock = () => (
@@ -24,48 +27,48 @@ export const Lock = () => (
 );
 
 export function Glyph({ p }: { p: Pulse }) {
-  return <div className={`glyph${isOver(p) ? " past" : ""}`} style={{ background: CATS[p.category].color }}>{CATS[p.category].glyph}</div>;
+  return <div className={`glyph${isOver(p) ? " past" : ""}`} style={{ background: CATS[p.category].color }} dangerouslySetInnerHTML={{ __html: catIcon(p.category, 22) }} />;
 }
 
 export function When({ p }: { p: Pulse }) {
   const st = status(p);
-  if (st.k === "over") return <span>Ended {ago(p.ends_at)}</span>;
-  if (st.k === "live") return <span className="live">● Live · {st.left} min left</span>;
-  return <span>Starts {dayClock(p.starts_at)}{st.in <= 180 ? ` · in ${st.in < 60 ? `${st.in} min` : span(st.in)}` : ""}</span>;
+  if (st.k === "over") return <span>{t("endedAgo", { t: ago(p.ends_at) })}</span>;
+  if (st.k === "live") return <span className="live">{t("liveLeft", { n: span(st.left) })}</span>;
+  return <span>{t("startsAt", { t: dayClock(p.starts_at) })}{st.in <= 180 ? ` · ${t("inTime", { n: span(st.in) })}` : ""}</span>;
 }
 
 export function Place({ p }: { p: Pulse }) {
   return showsExact(p) || isOver(p)
     ? <span>{placeLabel(p)}</span>
-    : <span className="lock"><Lock />Around {p.area_name}</span>;
+    : <span className="lock"><Lock />{t("around", { a: p.area_name })}</span>;
 }
 
 export function Seats({ p, uid }: { p: Pulse; uid: string | null }) {
   const n = accepted(p).length, mine = myStatus(p, uid) === "accepted";
   return (
-    <div className="seats" aria-label={`${Math.max(0, openSpots(p))} of ${p.need} spots open`}>
+    <div className="seats" aria-label={t("spotsOpen", { n: Math.max(0, openSpots(p)) })}>
       {Array.from({ length: p.need }, (_, i) => <span key={i} className={i < n ? (mine && i === n - 1 ? "me" : "f") : ""} />)}
     </div>
   );
 }
 
 export function JoinButton({ p, uid, a }: { p: Pulse; uid: string | null; a: Actions }) {
-  if (isHost(p, uid)) return <button className="join" onClick={(e) => { e.stopPropagation(); a.share(p); }}>{openSpots(p) > 0 ? "Share to fill spots" : "Share"}</button>;
+  if (isHost(p, uid)) return <button className="join" onClick={(e) => { e.stopPropagation(); a.share(p); }}>{openSpots(p) > 0 ? t("shareFill") : t("share")}</button>;
   const s = myStatus(p, uid);
-  if (s === "accepted") return <button className="join in" onClick={(e) => { e.stopPropagation(); a.leave(p); }}>You're in · Leave</button>;
-  if (s === "requested") return <button className="join wait" onClick={(e) => { e.stopPropagation(); a.leave(p); }}>Requested · Cancel</button>;
-  if (openSpots(p) <= 0) return <button className="join" disabled>Full</button>;
-  return <button className="join" onClick={(e) => { e.stopPropagation(); a.join(p); }}>{p.visibility === "all" ? "Join" : "Ask to join"}</button>;
+  if (s === "accepted") return <button className="join in" onClick={(e) => { e.stopPropagation(); a.leave(p); }}>{t("inLeave")}</button>;
+  if (s === "requested") return <button className="join wait" onClick={(e) => { e.stopPropagation(); a.leave(p); }}>{t("reqCancel")}</button>;
+  if (openSpots(p) <= 0) return <button className="join" disabled>{t("full")}</button>;
+  return <button className="join" onClick={(e) => { e.stopPropagation(); a.join(p); }}>{p.visibility === "all" ? t("join") : t("askJoin")}</button>;
 }
 
-export const by = (p: Pulse, uid: string | null) => `by ${hostName(p, uid)}`;
+export const by = (p: Pulse, uid: string | null) => t("by", { n: hostName(p, uid) });
 
 /** Walking directions in Google Maps. Only offered when this viewer may see the exact spot. */
-export function NavButton({ p, label = "Navigate" }: { p: Pulse; label?: string }) {
+export function NavButton({ p, label = t("navigate") }: { p: Pulse; label?: string }) {
   if (isOver(p) || !showsExact(p)) return null;
   return (
     <a className="mini nav" href={googleNavUrl(p.exact!)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-      aria-label={`${label} to ${p.exact!.place_name} in Google Maps`}>
+      aria-label={`${label}: ${p.exact!.place_name} (Google Maps)`}>
       <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" fill="currentColor" /></svg>
       {label}
     </a>

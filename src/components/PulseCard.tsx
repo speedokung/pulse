@@ -3,6 +3,7 @@ import { accepted, isOver, pos } from "../lib/pulse";
 import { distanceM } from "../lib/geo";
 import { dist, walkMin } from "../lib/format";
 import { Actions, by, Glyph, JoinButton, NavButton, Place, Seats, When } from "./ui";
+import { t } from "../lib/i18n";
 
 export function PulseCard({ p, uid, me, sel, a }: { p: Pulse; uid: string | null; me: LatLng; sel: boolean; a: Actions }) {
   const d = distanceM(me, pos(p)), past = isOver(p);
@@ -13,13 +14,13 @@ export function PulseCard({ p, uid, me, sel, a }: { p: Pulse; uid: string | null
       <div className="cbody">
         <p className="ctitle">{p.title}</p>
         <div className="meta"><When p={p} /></div>
-        <div className="meta"><Place p={p} /><span>{dist(d)}{past ? "" : ` · ${walkMin(d)} min walk`}</span><span>{by(p, uid)}</span></div>
+        <div className="meta"><Place p={p} /><span>{dist(d)}{past ? "" : ` · ${t("walk", { n: walkMin(d) })}`}</span><span>{by(p, uid)}</span></div>
         {past ? (
           <div className="cfoot">
-            <span className="meta">{accepted(p).length + 1} met up</span>
+            <span className="meta">{t("metUp", { n: accepted(p).length + 1 })}</span>
             <div className="btnrow">
-              <button className="mini" onClick={(e) => { e.stopPropagation(); a.again(p); }}>Pulse again</button>
-              <button className="mini pri" onClick={(e) => { e.stopPropagation(); a.share(p); }}>Share recap</button>
+              <button className="mini" onClick={(e) => { e.stopPropagation(); a.again(p); }}>{t("again")}</button>
+              <button className="mini pri" onClick={(e) => { e.stopPropagation(); a.share(p); }}>{t("shareRecap")}</button>
             </div>
           </div>
         ) : (

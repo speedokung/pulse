@@ -1,4 +1,6 @@
-# Pulse
+# แถว (Thaew)
+
+Thai-first app (English toggle in the top-left). Code and database still use the working name "Pulse" for an activity.
 
 A live map of casual meetups near you: pickup games, board games, jams, runs. Drop a **Pulse** when you're starting something in the next 3 hours, and people within walking distance can join in one tap.
 

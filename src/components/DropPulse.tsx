@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Category, LatLng, NewPulse, Visibility } from "../lib/types";
-import { CAT_KEYS, CATS } from "../lib/categories";
+import { CAT_KEYS, catName } from "../lib/categories";
+import { t, type Key } from "../lib/i18n";
 import { areaName, distanceM, parseMapsLink } from "../lib/geo";
 import { searchPlaces, type PlaceHit } from "../lib/places";
 import { dayClock, dist, span } from "../lib/format";
@@ -8,8 +9,8 @@ import { dayClock, dist, span } from "../lib/format";
 export interface DropPrefill { title?: string; category?: Category; need?: number; place?: string }
 
 const MIN = 60_000;
-const START_CHIPS: [string, number][] = [["Now", 0], ["In 15 min", 15], ["In 30 min", 30], ["In 1 h", 60], ["In 2 h", 120]];
-const DUR_CHIPS: [string, number][] = [["30 min", 30], ["1 h", 60], ["1.5 h", 90], ["2 h", 120], ["3 h", 180], ["4 h", 240]];
+const START_CHIPS: [Key, number][] = [["fNow", 0], ["fIn15", 15], ["fIn30", 30], ["fIn1h", 60], ["fIn2h", 120]];
+const DUR_CHIPS: number[] = [30, 60, 90, 120, 180, 240];
 const MAX_AHEAD_DAYS = 7, MAX_DUR = 12 * 60;
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -29,6 +30,10 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
   const [category, setCategory] = useState<Category>(prefill?.category ?? "sport");
   const [need, setNeed] = useState(prefill?.need ?? 2);
   const [vis, setVis] = useState<Visibility>("all");
+  // contact is remembered on this device for next time
+  const [lineId, setLineId] = useState(() => { try { return localStorage.getItem("pulse.lineId") || ""; } catch { return ""; } });
+  const [phone, setPhone] = useState(() => { try { return localStorage.getItem("pulse.phone") || ""; } catch { return ""; } });
+  const [landmark, setLandmark] = useState("");
   const [area, setArea] = useState("…");
   const [busy, setBusy] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -41,22 +46,22 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
   const [searching, setSearching] = useState(false);
   const [whereMsg, setWhereMsg] = useState<string | null>(null);
   useEffect(() => {
-    const t = q.trim();
+    const txt = q.trim();
     setHits([]);
-    if (!t) { setWhereMsg(null); return; }
-    if (/^https?:\/\//i.test(t) || /^-?\d{1,2}\.\d+\s*,/.test(t)) {
-      const r = parseMapsLink(t);
-      if (r === "short") setWhereMsg("Short share links (maps.app.goo.gl) can't be read. Open the link and copy the long address from the browser bar, or search by name.");
-      else if (!r) setWhereMsg("Couldn't find a location in that link. Try searching by name instead.");
-      else { onPin(r.ll); if (r.place) setAutoPlace(r.place, r.ll); setWhereMsg(`Pinned: ${r.place ?? "location from your link"}`); setQ(""); }
+    if (!txt) { setWhereMsg(null); return; }
+    if (/^https?:\/\//i.test(txt) || /^-?\d{1,2}\.\d+\s*,/.test(txt)) {
+      const r = parseMapsLink(txt);
+      if (r === "short") setWhereMsg(t("fShortLink"));
+      else if (!r) setWhereMsg(t("fBadLink"));
+      else { onPin(r.ll); if (r.place) setAutoPlace(r.place, r.ll); setWhereMsg(t("fPinned", { p: r.place ?? t("fFromLink") })); setQ(""); }
       return;
     }
-    if (t.length < 2) return;
+    if (txt.length < 2) return;
     const ctl = new AbortController();
     const timer = setTimeout(async () => {
       setSearching(true); setWhereMsg(null);
-      try { const h = await searchPlaces(t, me, ctl.signal); setHits(h); if (!h.length) setWhereMsg("No places found nearby. Try another name, or drag the pin."); }
-      catch { if (!ctl.signal.aborted) setWhereMsg("Search isn't responding. Drag the pin or tap the map instead."); }
+      try { const h = await searchPlaces(txt, me, ctl.signal); setHits(h); if (!h.length) setWhereMsg(t("fNoHits")); }
+      catch { if (!ctl.signal.aborted) setWhereMsg(t("fSearchDown")); }
       finally { if (!ctl.signal.aborted) setSearching(false); }
     }, 400);
     return () => { clearTimeout(timer); ctl.abort(); };
@@ -68,7 +73,7 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
     const a = autoPlace.current;
     if (a && distanceM(a.ll, pin) > 150) { if (place === a.name) setPlace(""); autoPlace.current = null; setWhereMsg(null); }
   }, [pin.lat, pin.lng]); // eslint-disable-line react-hooks/exhaustive-deps
-  const choose = (h: PlaceHit) => { onPin(h.ll); setAutoPlace(h.name, h.ll); setQ(""); setHits([]); setWhereMsg(`Pinned: ${h.name}`); };
+  const choose = (h: PlaceHit) => { onPin(h.ll); setAutoPlace(h.name, h.ll); setQ(""); setHits([]); setWhereMsg(t("fPinned", { p: h.name })); };
 
   // ---------- when ----------
   const [startPreset, setStartPreset] = useState<number | "custom">(0);
@@ -84,9 +89,9 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
     if (end.getTime() <= startAt) end.setDate(end.getDate() + 1); // past midnight
     return Math.round((end.getTime() - startAt) / MIN);
   }, [durPreset, until, startAt]);
-  const timeError = startAt < Date.now() - 5 * MIN ? "That start time has passed."
-    : startAt > Date.now() + MAX_AHEAD_DAYS * 86_400_000 ? `Pick a start within the next ${MAX_AHEAD_DAYS} days.`
-    : durMin < 15 ? "Make it at least 15 minutes." : durMin > MAX_DUR ? "Keep it under 12 hours. You can extend it later." : null;
+  const timeError = startAt < Date.now() - 5 * MIN ? t("fErrPast")
+    : startAt > Date.now() + MAX_AHEAD_DAYS * 86_400_000 ? t("fErrFar", { n: MAX_AHEAD_DAYS })
+    : durMin < 15 ? t("fErrShort") : durMin > MAX_DUR ? t("fErrLong") : null;
 
   const d = distanceM(me, pin);
   const submit = async (e: React.FormEvent) => {
@@ -94,9 +99,11 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
     if (title.trim().length < 3) { titleRef.current?.focus(); return; }
     if (timeError) return;
     setBusy(true);
+    try { localStorage.setItem("pulse.lineId", lineId.trim()); localStorage.setItem("pulse.phone", phone.trim()); } catch { /* ignore */ }
     const ok = await onSubmit({
       category, title: title.trim(), need, startInMin: Math.max(0, Math.round((startAt - Date.now()) / MIN)), durationMin: durMin,
       visibility: vis, lat: pin.lat, lng: pin.lng, place: place.trim(), area: area === "…" ? "Nearby" : area,
+      contact: { line_id: lineId.trim().replace(/^@?/, "") || null, phone: phone.trim() || null, landmark: landmark.trim() || null },
     });
     setBusy(false);
     if (!ok) titleRef.current?.focus();
@@ -104,24 +111,24 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
 
   return (
     <form className="sheet" onSubmit={submit} hidden={hidden}>
-      <h2>{prefill ? "Pulse again" : "Drop a Pulse"}</h2>
-      <label className="f" htmlFor="f-title">What's happening
-        <input ref={titleRef} type="text" id="f-title" maxLength={80} required minLength={3} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Need 2 for doubles badminton" />
+      <h2>{prefill ? t("dropAgain") : t("dropTitle")}</h2>
+      <label className="f" htmlFor="f-title">{t("fWhat")}
+        <input ref={titleRef} type="text" id="f-title" maxLength={80} required minLength={3} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("fWhatPh")} />
       </label>
       <div className="grid2">
-        <label className="f" htmlFor="f-cat">Type
-          <select id="f-cat" value={category} onChange={(e) => setCategory(e.target.value as Category)}>{CAT_KEYS.map((k) => <option key={k} value={k}>{CATS[k].name}</option>)}</select>
+        <label className="f" htmlFor="f-cat">{t("fType")}
+          <select id="f-cat" value={category} onChange={(e) => setCategory(e.target.value as Category)}>{CAT_KEYS.map((k) => <option key={k} value={k}>{catName(k)}</option>)}</select>
         </label>
-        <label className="f" htmlFor="f-need">More people needed
+        <label className="f" htmlFor="f-need">{t("fNeed")}
           <select id="f-need" value={need} onChange={(e) => setNeed(+e.target.value)}>{Array.from({ length: 20 }, (_, i) => i + 1).map((n) => <option key={n}>{n}</option>)}</select>
         </label>
       </div>
 
       <fieldset className="group">
-        <legend>Where</legend>
+        <legend>{t("fWhere")}</legend>
         <div className="searchbox">
           <input type="search" id="f-where" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off"
-            placeholder="Search a place, or paste a Google Maps link" aria-label="Search a place or paste a Google Maps link" />
+            placeholder={t("fWherePh")} aria-label={t("fWherePh")} />
           {searching && <span className="spin" aria-hidden="true" />}
           {hits.length > 0 && (
             <ul className="hits" role="listbox" aria-label="Places">
@@ -135,51 +142,67 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
         </div>
         {whereMsg && <div className="where" role="status">{whereMsg}</div>}
         <div className="row">
-          <button type="button" className="mini" onClick={() => { onPin(me); setWhereMsg("Pinned at your location."); }}>Use my location</button>
-          <button type="button" className="mini" onClick={onMovePin}>Pick on map</button>
+          <button type="button" className="mini" onClick={() => { onPin(me); setWhereMsg(t("fPinnedAtYou")); }}>{t("fUseLoc")}</button>
+          <button type="button" className="mini" onClick={onMovePin}>{t("fPickMap")}</button>
         </div>
-        <label className="f" htmlFor="f-place">Spot name people will see
-          <input type="text" id="f-place" maxLength={60} value={place} onChange={(e) => setPlace(e.target.value)} placeholder="Court 3, Lumphini Park" />
+        <label className="f" htmlFor="f-place">{t("fSpotName")}
+          <input type="text" id="f-place" maxLength={60} value={place} onChange={(e) => setPlace(e.target.value)} placeholder={t("fSpotPh")} />
         </label>
-        <div className="where">{d < 40 ? "At your location" : `${dist(d)} from you`} · around {area} · you can also drag the orange pin</div>
+        <div className="where">{d < 40 ? t("fAtYou") : t("fFromYou", { d: dist(d) })} · {t("around", { a: area })} · {t("fDragHint")}</div>
       </fieldset>
 
       <fieldset className="group">
-        <legend>When</legend>
+        <legend>{t("fWhen")}</legend>
         <div className="row" role="group" aria-label="Start">
-          {START_CHIPS.map(([l, v]) => <button type="button" key={l} className="chip" aria-pressed={startPreset === v} onClick={() => setStartPreset(v)}>{l}</button>)}
-          <button type="button" className="chip" aria-pressed={startPreset === "custom"} onClick={() => setStartPreset("custom")}>Pick a time</button>
+          {START_CHIPS.map(([l, v]) => <button type="button" key={l} className="chip" aria-pressed={startPreset === v} onClick={() => setStartPreset(v)}>{t(l)}</button>)}
+          <button type="button" className="chip" aria-pressed={startPreset === "custom"} onClick={() => setStartPreset("custom")}>{t("fPickTime")}</button>
         </div>
         {startPreset === "custom" && (
-          <label className="f" htmlFor="f-start">Starts
+          <label className="f" htmlFor="f-start">{t("fStarts")}
             <input type="datetime-local" id="f-start" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
               min={toLocalInput(new Date())} max={toLocalInput(new Date(Date.now() + MAX_AHEAD_DAYS * 86_400_000))} />
           </label>
         )}
         <div className="row" role="group" aria-label="How long">
-          {DUR_CHIPS.map(([l, v]) => <button type="button" key={l} className="chip" aria-pressed={durPreset === v} onClick={() => setDurPreset(v)}>{l}</button>)}
-          <button type="button" className="chip" aria-pressed={durPreset === "until"} onClick={() => setDurPreset("until")}>Until…</button>
+          {DUR_CHIPS.map((v) => <button type="button" key={v} className="chip" aria-pressed={durPreset === v} onClick={() => setDurPreset(v)}>{span(v)}</button>)}
+          <button type="button" className="chip" aria-pressed={durPreset === "until"} onClick={() => setDurPreset("until")}>{t("fUntil")}</button>
         </div>
         {durPreset === "until" && (
-          <label className="f" htmlFor="f-until">Ends at
+          <label className="f" htmlFor="f-until">{t("fEndsAt")}
             <input type="time" id="f-until" value={until} onChange={(e) => setUntil(e.target.value)} />
           </label>
         )}
         <div className={`where${timeError ? " err" : ""}`} role="status">
-          {timeError ?? `${startPreset === 0 ? "Starts now" : `Starts ${dayClock(startAt)}`} · ends ${dayClock(startAt + durMin * MIN)} (${span(durMin)}). You can extend it while it's on.`}
+          {timeError ?? t("fWhenSummary", { s: startPreset === 0 ? t("fStartsNow") : t("startsAt", { t: dayClock(startAt) }), e: dayClock(startAt + durMin * MIN), d: span(durMin) })}
         </div>
       </fieldset>
 
+      <fieldset className="group">
+        <legend>{t("fContact")}</legend>
+        <div className="sub">{t("fContactWhy")}</div>
+        <div className="grid2">
+          <label className="f" htmlFor="f-line">{t("fLine")}
+            <input type="text" id="f-line" maxLength={40} autoCapitalize="off" autoCorrect="off" value={lineId} onChange={(e) => setLineId(e.target.value)} placeholder={t("fLinePh")} />
+          </label>
+          <label className="f" htmlFor="f-phone">{t("fPhone")}
+            <input type="tel" id="f-phone" maxLength={20} inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("fPhonePh")} />
+          </label>
+        </div>
+        <label className="f" htmlFor="f-landmark">{t("fLandmark")}
+          <input type="text" id="f-landmark" maxLength={120} value={landmark} onChange={(e) => setLandmark(e.target.value)} placeholder={t("fLandmarkPh")} />
+        </label>
+      </fieldset>
+
       <fieldset className="vis">
-        <legend>Who sees the exact spot</legend>
+        <legend>{t("fWho")}</legend>
         <label className="opt" htmlFor="f-vis-all"><input type="radio" id="f-vis-all" name="vis" checked={vis === "all"} onChange={() => setVis("all")} />
-          <span>Everyone<small>Anyone nearby sees the pin and can join straight away.</small></span></label>
+          <span>{t("fEveryone")}<small>{t("fEveryoneSub")}</small></span></label>
         <label className="opt" htmlFor="f-vis-acc"><input type="radio" id="f-vis-acc" name="vis" checked={vis === "accepted"} onChange={() => setVis("accepted")} />
-          <span>Only people I accept<small>Others see a rough area. You approve each request, then they see the pin.</small></span></label>
+          <span>{t("fAcceptOnly")}<small>{t("fAcceptOnlySub")}</small></span></label>
       </fieldset>
       <div className="btns">
-        <button type="button" className="ghostbtn" onClick={onCancel}>Cancel</button>
-        <button type="submit" className="go" disabled={busy || !!timeError}>{busy ? "Posting…" : startPreset === 0 ? "Go live" : "Post Pulse"}</button>
+        <button type="button" className="ghostbtn" onClick={onCancel}>{t("cancel")}</button>
+        <button type="submit" className="go" disabled={busy || !!timeError}>{busy ? t("posting") : startPreset === 0 ? t("fGoLive") : t("fPost")}</button>
       </div>
     </form>
   );

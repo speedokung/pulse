@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Category, LatLng, Pulse } from "./lib/types";
-import { CAT_KEYS, CATS, RADII, RadiusKey } from "./lib/categories";
+import { CAT_KEYS, CATS, catName, RADII, RadiusKey } from "./lib/categories";
 import { configured } from "./lib/supabase";
-import { createPulse, endPulse, extendPulse, errText, joinPulse, leavePulse, postToFeed, respondRequest, searchHistory } from "./lib/api";
+import { createPulse, endPulse, extendPulse, sendMessage, setContact, errText, joinPulse, leavePulse, postToFeed, respondRequest, searchHistory } from "./lib/api";
 import { isOver, pos, status } from "./lib/pulse";
-import type { Lang } from "./lib/captions";
+import { getLang, setLang as setUiLang, t, t as tr, type Lang } from "./lib/i18n";
 import { prefs, useLiveData, useLocation, useTick } from "./hooks";
 import { useAuth } from "./auth";
 import { MapView } from "./components/MapView";
@@ -19,7 +19,7 @@ import { ProfileSheet } from "./components/ProfileSheet";
 import { Avatar, type Actions } from "./components/ui";
 
 type Tab = "map" | "near" | "feed" | "hist" | "grow";
-const TAB_LABEL: Record<Exclude<Tab, "map">, string> = { near: "Nearby", feed: "Feed", hist: "History", grow: "Grow" };
+const TAB_LABEL: Record<Exclude<Tab, "map">, () => string> = { near: () => t("tabNear"), feed: () => t("tabFeed"), hist: () => t("tabHist"), grow: () => t("tabGrow") };
 
 export default function App() {
   useTick();
@@ -36,7 +36,7 @@ export default function App() {
   const [placing, setPlacing] = useState<null | "pin" | "me">(null);
   const [drop, setDrop] = useState<{ pin: LatLng; prefill: DropPrefill | null; k: number } | null>(null);
   const [share, setShare] = useState<Pulse | "poster" | null>(null);
-  const [lang, setLangState] = useState<Lang>(() => prefs.read("lang", "en"));
+  const [lang, setLangState] = useState<Lang>(getLang);
   const [profileOpen, setProfileOpen] = useState<null | { reason: string | null }>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [centerOn, setCenterOn] = useState<{ ll: LatLng; k: number } | null>(null);
@@ -46,7 +46,8 @@ export default function App() {
 
   const toastT = useRef<ReturnType<typeof setTimeout>>();
   const toast = useCallback((s: string) => { setToastMsg(s); clearTimeout(toastT.current); toastT.current = setTimeout(() => setToastMsg(null), 3200); }, []);
-  const setLang = (l: Lang) => { setLangState(l); prefs.write("lang", l); };
+  const [capLang, setCapLang] = useState<Lang>(getLang); // caption language can differ from the app language
+  const setLang = (l: Lang) => { setUiLang(l); setLangState(l); setCapLang(l); };
   const radiusM = RADII[radius].m;
   const panelTab: Exclude<Tab, "map"> = tab === "map" ? "near" : tab;
 
@@ -98,8 +99,8 @@ export default function App() {
     if (window.innerWidth < 820) setTab("map");
   }, [all]);
 
-  const hasName = !!auth.profile && auth.profile.display_name !== "Someone";
-  const needName = (why = "Hosts see your name when you join. Pick one, or use your Google account.") => {
+  const hasName = !!auth.profile?.display_name && auth.profile.display_name !== "Someone";
+  const needName = (why = t("whyJoin")) => {
     if (configured && !hasName) { setProfileOpen({ reason: why }); return true; }
     return false;
   };
@@ -118,12 +119,12 @@ export default function App() {
 
   const a: Actions = {
     select,
-    join: (p) => { if (needName("Hosts see your name when you ask to join. Pick one, or use your Google account.")) return;
-      run(async () => { const st = await joinPulse(p.id); toast(st === "accepted" ? `You're in. ${p.exact ? "See you at " + p.exact.place_name + "." : ""}` : `Request sent to ${p.host?.display_name || "the host"}.`); }); },
-    leave: (p) => { run(() => leavePulse(p.id), `Left “${p.title}”`); },
-    respond: (p, user, ok) => { run(() => respondRequest(p.id, user, ok), ok ? "Accepted. They can see the exact spot now." : "Declined."); },
-    end: (p) => { const later = status(p).k === "soon"; if (later) setSel(null); run(() => endPulse(p.id), later ? "Cancelled." : "Ended. It stays on the map as history."); },
-    extend: (p, m) => { run(() => extendPulse(p.id, m), `Extended by ${m} min.`); },
+    join: (p) => { if (needName(t("whyJoin"))) return;
+      run(async () => { const st = await joinPulse(p.id); toast(st === "accepted" ? t("tJoined", { s: p.exact ? t("tSeeYouAt", { p: p.exact.place_name }) : "" }) : t("tRequested", { h: p.host?.display_name || t("theHost") })); }); },
+    leave: (p) => { run(() => leavePulse(p.id), t("tLeft", { t: p.title })); },
+    respond: (p, user, ok) => { run(() => respondRequest(p.id, user, ok), ok ? t("tAccepted") : t("tDeclined")); },
+    end: (p) => { const later = status(p).k === "soon"; if (later) setSel(null); run(() => endPulse(p.id), later ? t("tCancelled") : t("tEnded")); },
+    extend: (p, m) => { run(() => extendPulse(p.id, m), t("tExtended", { n: m })); },
     share: (p) => setShare(p),
     again: (p) => {
       const ll = p.exact ? { lat: p.exact.lat, lng: p.exact.lng } : { lat: p.rough_lat, lng: p.rough_lng };
@@ -131,30 +132,32 @@ export default function App() {
       setDrop({ pin: ll, prefill: { title: p.title, category: p.category, need: p.need, place: p.exact?.place_name ?? "" }, k: Date.now() });
       setCenterOn({ ll, k: Date.now() });
     },
+    chat: async (p, body) => { try { await sendMessage(p.id, body); return true; } catch (e) { toast(errText(e)); return false; } },
+    saveContact: (p, c) => run(() => setContact(p.id, c), t("cSaved")),
     post: async (p, kind, body, file) => {
-      if (needName("People see your name next to your update.")) return false;
-      return run(() => postToFeed(uid!, p.id, kind, body, file), kind === "checkin" ? "Checked in. People nearby can see you're there." : "Posted.");
+      if (needName(t("whyPost"))) return false;
+      return run(() => postToFeed(uid!, p.id, kind, body, file), kind === "checkin" ? t("tCheckedIn") : t("tPosted"));
     },
   };
 
-  const openDrop = () => { if (needName("People nearby see who is hosting. Pick a name, or use your Google account.")) return; setSel(null); setDrop({ pin: loc.me, prefill: null, k: Date.now() }); if (window.innerWidth < 820) setTab("map"); };
+  const openDrop = () => { if (needName(t("whyHost"))) return; setSel(null); setDrop({ pin: loc.me, prefill: null, k: Date.now() }); if (window.innerWidth < 820) setTab("map"); };
   const onPick = (ll: LatLng) => {
-    if (placing === "me") { loc.setManual(ll); setPlacing(null); toast("Your spot is set. Distances are measured from here."); return; }
+    if (placing === "me") { loc.setManual(ll); setPlacing(null); toast(t("spotSet")); return; }
     if (drop) { setDrop({ ...drop, pin: ll }); setPlacing(null); }
   };
   const submitDrop = async (np: Parameters<typeof createPulse>[0]) => {
     try {
       const id = await createPulse(np);
-      setDrop(null); toast(np.startInMin <= 1 ? "Your Pulse is live. People nearby can see it now." : "Posted. People nearby can see it and join ahead of time."); await data.reload(); setSel(id);
+      setDrop(null); toast(np.startInMin <= 1 ? t("tLiveNow") : t("tScheduled")); await data.reload(); setSel(id);
       return true;
     } catch (e) { toast(errText(e)); return false; }
   };
 
   const live = near.filter((p) => status(p).k === "live").length;
   const soon3 = near.filter((p) => status(p).k === "soon" && new Date(p.starts_at).getTime() - Date.now() <= 3 * 3_600_000).length;
-  const summary = panelTab === "near" ? `${live} live now · ${soon3} in the next 3 hours · ${near.length - live - soon3} later`
-    : panelTab === "feed" ? "Updates, photos and check-ins from activities around you"
-    : panelTab === "hist" ? `${histList.length} past Pulses` : "Free ways to spread Pulse, written from what's on the map";
+  const summary = panelTab === "near" ? t("sumNear", { a: live, b: soon3, c: near.length - live - soon3 })
+    : panelTab === "feed" ? t("sumFeed")
+    : panelTab === "hist" ? t("sumHist", { n: histList.length }) : t("sumGrow");
 
   return (
     <div className={`app tab-${tab}`}>
@@ -162,20 +165,21 @@ export default function App() {
         <MapView me={loc.me} items={mapItems} uid={uid} selectedId={sel} surfaced={surfaced} radiusM={radiusM}
           placing={!!placing} pin={drop && !placing ? drop.pin : placing === "pin" && drop ? drop.pin : null}
           centerOn={centerOn} onSelect={select} onPick={onPick} />
-        <div className="brand"><span className="dot" /><b>Pulse</b><span className="brand-sub">{configured ? "live" : "demo"}</span></div>
+        <div className="brand"><span className="dot" /><b>{t("brand")}</b>{!configured && <span className="brand-sub">{t("demo")}</span>}
+          <button className="langbtn" onClick={() => setLang(lang === "th" ? "en" : "th")} aria-label={t("language")}>{lang === "th" ? "EN" : "ไทย"}</button></div>
         <div className="mapctl">
-          <button className="me-btn" onClick={() => setProfileOpen({ reason: null })} aria-label="Your profile">
-          <Avatar name={auth.profile?.display_name || "You"} url={auth.profile?.avatar_url} size={30} />
-          <span className="me-name">{auth.isGuest ? (hasName ? auth.profile!.display_name : "Sign in") : auth.profile?.display_name}</span>
+          <button className="me-btn" onClick={() => setProfileOpen({ reason: null })} aria-label={t("profile")}>
+          <Avatar name={auth.profile?.display_name || t("you")} url={auth.profile?.avatar_url} size={30} />
+          <span className="me-name">{configured && auth.isGuest && !hasName ? t("signIn") : auth.profile?.display_name || t("you")}</span>
         </button>
-          <button className="mapbtn" aria-pressed={showPast} onClick={() => setShowPast(!showPast)}>Past Pulses</button>
+          <button className="mapbtn" aria-pressed={showPast} onClick={() => setShowPast(!showPast)}>{t("pastToggle")}</button>
           {loc.source === "manual"
-            ? <button className="mapbtn" onClick={() => { loc.useGps(); toast("Using your GPS location."); }}>Use my GPS</button>
-            : <button className="mapbtn" onClick={() => { setPlacing("me"); }}>Set my spot</button>}
+            ? <button className="mapbtn" onClick={() => { loc.useGps(); toast(t("usingGps")); }}>{t("useGps")}</button>
+            : <button className="mapbtn" onClick={() => { setPlacing("me"); }}>{t("setMySpot")}</button>}
         </div>
-        {placing && <div className="placehint">{placing === "me" ? "Tap where you are" : "Tap where it's happening"} <button onClick={() => setPlacing(null)}>Cancel</button></div>}
+        {placing && <div className="placehint">{placing === "me" ? t("tapWhereYouAre") : t("tapWhereItIs")} <button onClick={() => setPlacing(null)}>{t("cancel")}</button></div>}
         {selected && !drop && <PulseDetail p={selected} uid={uid} me={loc.me} posts={data.posts} a={a} />}
-        {!drop && !placing && <button className="fab" onClick={openDrop}><span className="ring" />Drop a Pulse</button>}
+        {!drop && !placing && <button className="fab" onClick={openDrop}><span className="ring" />{t("fab")}</button>}
         {drop && (
           <DropPulse key={drop.k} hidden={!!placing} pin={drop.pin} me={loc.me} prefill={drop.prefill} onMovePin={() => setPlacing("pin")} onPin={(ll) => { setDrop((d) => (d ? { ...d, pin: ll } : d)); setCenterOn({ ll, k: Date.now() }); }} onCancel={() => setDrop(null)} onSubmit={submitDrop} />
         )}
@@ -185,53 +189,53 @@ export default function App() {
         <div className="sidehead">
           <div className="tabs" role="tablist">
             {(Object.keys(TAB_LABEL) as (keyof typeof TAB_LABEL)[]).map((t) => (
-              <button key={t} role="tab" aria-selected={panelTab === t} onClick={() => setTab(t)}>{TAB_LABEL[t]}</button>
+              <button key={t} role="tab" aria-selected={panelTab === t} onClick={() => setTab(t)}>{TAB_LABEL[t]()}</button>
             ))}
           </div>
           <div className="sub">{summary}</div>
-          {panelTab === "hist" && <input className="search" type="search" id="h-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search past Pulses: pickleball, Lumphini, chess…" />}
+          {panelTab === "hist" && <input className="search" type="search" id="h-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("searchPast")} />}
           {panelTab === "hist" && (
             <div className="seg" role="group" aria-label="When">
-              {(Object.keys(PERIODS) as Period[]).map((k) => <button key={k} aria-pressed={period === k} onClick={() => setPeriod(k)}>{PERIODS[k].label}</button>)}
+              {(Object.keys(PERIODS) as Period[]).map((k) => <button key={k} aria-pressed={period === k} onClick={() => setPeriod(k)}>{PERIODS[k].label()}</button>)}
             </div>
           )}
           {(panelTab === "near" || panelTab === "feed") && (
             <div className="seg" role="group" aria-label="Distance">
-              {(Object.keys(RADII) as RadiusKey[]).map((k) => <button key={k} aria-pressed={radius === k} onClick={() => { setRadius(k); prefs.write("radius", k); }}>{RADII[k].label}</button>)}
+              {(Object.keys(RADII) as RadiusKey[]).map((k) => <button key={k} aria-pressed={radius === k} onClick={() => { setRadius(k); prefs.write("radius", k); }}>{RADII[k].label()}</button>)}
             </div>
           )}
           {panelTab !== "grow" && (
             <div className="row">
               {CAT_KEYS.map((k) => (
                 <button key={k} className="chip" aria-pressed={cats.has(k)} onClick={() => { const s = new Set(cats); s.has(k) ? s.delete(k) : s.add(k); setCats(s); }}>
-                  <i style={{ background: CATS[k].color }} />{CATS[k].name}
+                  <i style={{ background: CATS[k].color }} />{catName(k)}
                 </button>
               ))}
             </div>
           )}
         </div>
         <div className="list">
-          {!configured && <div className="banner">Demo mode: example Pulses around central Bangkok, saved only on this device. Add your Supabase keys to go live.</div>}
-          {loc.source === "default" && <div className="banner"><span>Location is off, so distances are from central Bangkok.</span><button onClick={() => setPlacing("me")}>Set my spot</button></div>}
-          {data.error && <div className="banner">Couldn't load Pulses: {data.error}</div>}
-          {data.loading && !data.pulses.length ? <div className="empty">Finding what's happening near you…</div> : (
+          {!configured && <div className="banner">{t("demoBanner")}</div>}
+          {loc.source === "default" && <div className="banner"><span>{t("locOff")}</span><button onClick={() => setPlacing("me")}>{t("setMySpot")}</button></div>}
+          {data.error && <div className="banner">{t("loadFail", { e: data.error })}</div>}
+          {data.loading && !data.pulses.length ? <div className="empty">{t("loading")}</div> : (
             <>
               {panelTab === "near" && <NearbyTab list={near} uid={uid} me={loc.me} selectedId={sel} a={a} />}
               {panelTab === "feed" && <FeedTab pulses={pulses} posts={data.posts} uid={uid} me={loc.me} radiusM={radiusM} a={a} />}
               {panelTab === "hist" && <HistoryTab results={histList} loading={hist.loading} q={q} uid={uid} me={loc.me} selectedId={sel} a={a} />}
-              {panelTab === "grow" && <GrowTab pulses={data.pulses} selected={selected} lang={lang} setLang={setLang} onShare={setShare} onPoster={() => setShare("poster")} toast={toast} />}
+              {panelTab === "grow" && <GrowTab pulses={data.pulses} selected={selected} lang={capLang} setLang={setCapLang} onShare={setShare} onPoster={() => setShare("poster")} toast={toast} />}
             </>
           )}
         </div>
       </aside>
 
-      <nav className="tabbar" aria-label="Sections">
+      <nav className="tabbar" aria-label="Sections" lang={lang}>
         {(["map", "near", "feed", "hist", "grow"] as Tab[]).map((t) => (
-          <button key={t} aria-current={tab === t ? "page" : undefined} onClick={() => setTab(t)}>{t === "map" ? "Map" : TAB_LABEL[t]}</button>
+          <button key={t} aria-current={tab === t ? "page" : undefined} onClick={() => setTab(t)}>{t === "map" ? tr("tabMap") : TAB_LABEL[t]()}</button>
         ))}
       </nav>
 
-      {share && <ShareModal target={share} lang={lang} setLang={setLang} onClose={() => setShare(null)} toast={toast} />}
+      {share && <ShareModal target={share} lang={capLang} setLang={setCapLang} onClose={() => setShare(null)} toast={toast} />}
       {profileOpen && <ProfileSheet auth={auth} reason={profileOpen.reason} onClose={() => setProfileOpen(null)} toast={toast} />}
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
     </div>

@@ -32,7 +32,12 @@ export interface Pulse {
   memberships: Member[];
   /** Present only when the server lets this viewer see the exact spot. */
   exact?: { lat: number; lng: number; place_name: string } | null;
+  /** Host's contact; present only for the host and accepted people. */
+  contact?: Contact | null;
 }
+
+export interface Contact { line_id: string | null; phone: string | null; landmark: string | null }
+export interface ChatMessage { id: string; pulse_id: string; author_id: string; body: string; created_at: string; author?: PublicProfile | null }
 
 export type PostKind = "update" | "photo" | "checkin";
 export interface FeedPost {
@@ -59,4 +64,5 @@ export interface NewPulse {
   lng: number;
   place: string;
   area: string;
+  contact: Contact;
 }

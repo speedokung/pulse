@@ -5,9 +5,10 @@
   --ghost: #c9d2d2; --ghost-ink: #6f7f7d;
   --accent: #ff5a36; --accent-ink: #ffffff; --you: #1a5cff;
   --shadow: 0 6px 24px rgba(20, 33, 31, .14);
-  --f-display: "Bricolage Grotesque", "Noto Sans Thai", "Segoe UI", system-ui, sans-serif;
-  --f-body: "Instrument Sans", "Noto Sans Thai", system-ui, -apple-system, sans-serif;
-  --f-data: "IBM Plex Mono", "Noto Sans Thai", ui-monospace, Menlo, monospace;
+  --f-display: "Bricolage Grotesque", "Anuphan", "Noto Sans Thai", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Instrument Sans", "Anuphan", "Noto Sans Thai", system-ui, -apple-system, sans-serif;
+  --f-data: "IBM Plex Mono", "Anuphan", "Noto Sans Thai", ui-monospace, Menlo, monospace;
+  --f-thai: "Anuphan", "Noto Sans Thai", "Instrument Sans", system-ui, sans-serif;
   --tabbar: 0px;
   color-scheme: light;
 }
@@ -274,3 +275,49 @@ label.f input, label.f select { padding: 10px 12px; border: 1px solid var(--line
 .hits span { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .where.err { color: #d9480f; }
 label.f input[type="datetime-local"], label.f input[type="time"] { min-height: 42px; }
+
+/* ---------- Thai typography ----------
+   Thai has tall vowel and tone marks above and below the line, no capitals,
+   and breaks when letter-spaced. So in Thai: a Thai-first face everywhere,
+   more line height, no uppercase or tracking, and no monospace for running text. */
+html:lang(th) body { font-family: var(--f-thai); font-size: 16px; line-height: 1.55; }
+html:lang(th) .meta, html:lang(th) .slot, html:lang(th) .kicker, html:lang(th) .where,
+html:lang(th) .post label, html:lang(th) .post-time, html:lang(th) .tag, html:lang(th) .pm-stack,
+html:lang(th) label.f, html:lang(th) .vis legend, html:lang(th) .group legend, html:lang(th) .f-label, html:lang(th) .brand-sub {
+  font-family: var(--f-thai); text-transform: none; letter-spacing: 0;
+}
+html:lang(th) .meta { font-size: 13px; }
+html:lang(th) .slot { font-size: 13px; font-weight: 600; }
+html:lang(th) label.f, html:lang(th) .vis legend, html:lang(th) .group legend, html:lang(th) .f-label { font-size: 13.5px; }
+html:lang(th) .tabs button, html:lang(th) .detail h3, html:lang(th) .fcard h4, html:lang(th) .sheet h2, html:lang(th) .grow h3, html:lang(th) .mbox h3,
+html:lang(th) .fab, html:lang(th) .brand b { font-family: var(--f-thai); font-weight: 700; letter-spacing: 0; }
+html:lang(th) .ctitle { font-weight: 600; }
+html:lang(th) .detail h3, html:lang(th) .fcard h4 { line-height: 1.3; }
+html:lang(th) .pm-label { font-family: var(--f-thai); font-size: 13px; }
+.brand b { font-size: 21px; }
+.langbtn { border: 1px solid var(--line); background: none; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+.glyph svg { color: #fff; }
+.glyph.past svg { color: var(--ghost-ink); }
+.pm-ghost .pm-core svg { display: block; }
+
+/* ---------- contact + group chat ---------- */
+.contact, .chat { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 10px; display: grid; gap: 8px; }
+.contact-h { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.contact-h b { font-size: 14px; }
+.contact-h .sub { font-size: 12px; }
+.linkbtn { border: none; background: none; color: var(--you); font-weight: 600; font-size: 12.5px; padding: 0; margin-left: auto; }
+.landmark { font-size: 14px; background: var(--bg); border-radius: 10px; padding: 8px 10px; }
+.landmark span { color: var(--muted); }
+.mini.line { background: #06c755; border-color: #06c755; color: #fff; }
+.chat-list { max-height: 220px; overflow-y: auto; display: grid; gap: 6px; padding: 2px 0; }
+.msg { display: flex; gap: 6px; align-items: flex-end; }
+.msg.mine { justify-content: flex-end; }
+.bubble { background: var(--bg); border-radius: 14px 14px 14px 4px; padding: 6px 10px; max-width: 80%; display: grid; gap: 1px; font-size: 14px; line-height: 1.4; }
+.msg.mine .bubble { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); border-radius: 14px 14px 4px 14px; }
+.bubble b { font-size: 12px; color: var(--muted); font-weight: 600; }
+.bubble time { font-size: 11px; color: var(--muted); justify-self: end; font-variant-numeric: tabular-nums; }
+.quick { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.quick .chip { white-space: nowrap; flex: none; font-size: 13px; }
+.chat-in { display: flex; gap: 6px; }
+.chat-in input { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); font-size: 15px; }
+.contact label.f input { font-size: 14px; }

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { LatLng, Pulse } from "../lib/types";
-import { CATS } from "../lib/categories";
+import { CATS, catIcon } from "../lib/categories";
+import { t } from "../lib/i18n";
 import { circle } from "../lib/geo";
 import { bury, isHost, isOver, openSpots, pos, showsExact, status } from "../lib/pulse";
 
@@ -126,7 +127,7 @@ export function MapView(p: Props) {
       mk.getElement().style.zIndex = String(rank(x) + 1);
       const el = mk.getElement().firstElementChild as HTMLDivElement;
       el.style.setProperty("--c", CATS[x.category].color);
-      const sel = x.id === p.selectedId, n = stack.get(x.id) || 0, c = CATS[x.category];
+      const sel = x.id === p.selectedId, n = stack.get(x.id) || 0;
       if (buried.has(x.id)) {
         el.className = "pm pm-buried"; el.innerHTML = ""; el.tabIndex = -1; el.removeAttribute("role");
         return;
@@ -134,10 +135,10 @@ export function MapView(p: Props) {
       el.tabIndex = 0; el.setAttribute("role", "button");
       if (isOver(x, now)) {
         el.className = `pm pm-ghost${sel ? " sel" : ""}${p.surfaced ? " hi" : ""}`;
-        el.setAttribute("aria-label", `Ended: ${x.title}`);
-        el.innerHTML = `${n ? '<i class="pm-sheet"></i><i class="pm-sheet b"></i>' : ""}<span class="pm-core">${c.glyph}</span>`
+        el.setAttribute("aria-label", `${t("ended")}: ${x.title}`);
+        el.innerHTML = `${n ? '<i class="pm-sheet"></i><i class="pm-sheet b"></i>' : ""}<span class="pm-core">${catIcon(x.category, 13)}</span>`
           + (sel || p.surfaced ? `<span class="pm-label">${esc(x.title)}</span>` : "")
-          + (n ? `<span class="pm-stack">+${n} earlier</span>` : "");
+          + (n ? `<span class="pm-stack">${t("earlier", { n })}</span>` : "");
         return;
       }
       const st = status(x, now), o = openSpots(x);
@@ -149,8 +150,8 @@ export function MapView(p: Props) {
         <svg class="pm-ring" viewBox="0 0 60 60"><circle cx="30" cy="30" r="26" class="t"/><circle cx="30" cy="30" r="26" class="f" stroke-dasharray="${C * frac} ${C}"/></svg>
         <span class="pm-core">${o > 0 ? `+${o}` : "✓"}</span>
         ${showsExact(x, now) ? "" : `<span class="pm-lock">${LOCK}</span>`}
-        <span class="pm-label">${esc(showsExact(x, now) ? x.exact!.place_name : "Around " + x.area_name)}</span>
-        ${n ? `<span class="pm-stack">+${n} earlier here</span>` : ""}`;
+        <span class="pm-label">${esc(showsExact(x, now) ? x.exact!.place_name : t("around", { a: x.area_name }))}</span>
+        ${n ? `<span class="pm-stack">${t("earlierHere", { n })}</span>` : ""}`;
     });
     for (const [id, mk] of marks.current) if (!seen.has(id)) { mk.remove(); marks.current.delete(id); }
 

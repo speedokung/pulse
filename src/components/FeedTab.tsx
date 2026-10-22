@@ -1,10 +1,11 @@
 import type { FeedPost, LatLng, Pulse } from "../lib/types";
-import { CATS } from "../lib/categories";
+import { CATS, catName } from "../lib/categories";
 import { accepted, HOUR, isOver, isParticipant, ms, openSpots, pos, status } from "../lib/pulse";
 import { distanceM } from "../lib/geo";
 import { ago, dist, walkMin } from "../lib/format";
 import { Actions, JoinButton, NavButton, Place, When } from "./ui";
 import { Composer, photoSrc, PostLine } from "./Posts";
+import { t } from "../lib/i18n";
 
 /** "What's it like right now?" A scroll of live updates, photos and check-ins nearby. */
 export function FeedTab({ pulses, posts, uid, me, radiusM, a }: {
@@ -22,16 +23,16 @@ export function FeedTab({ pulses, posts, uid, me, radiusM, a }: {
     .sort((x, y) => ms(y.ends_at) - ms(x.ends_at));
 
   if (!live.length && !soon.length && !ended.length)
-    return <div className="empty">It's quiet around you right now.<br />Widen the distance, or drop a Pulse and be the first update here.</div>;
+    return <div className="empty" dangerouslySetInnerHTML={{ __html: t("emptyFeed") }} />;
 
   const Section = ({ title, list }: { title: string; list: Pulse[] }) =>
     list.length ? <><div className="slot">{title}</div>{list.map((p) => <FeedCard key={p.id} p={p} posts={byPulse.get(p.id) || []} uid={uid} me={me} a={a} />)}</> : null;
 
   return (
     <div className="feed">
-      <Section title="Live now" list={live} />
-      <Section title="Starting soon" list={soon} />
-      <Section title="Just wrapped up" list={ended} />
+      <Section title={t("gLive")} list={live} />
+      <Section title={t("gSoon")} list={soon} />
+      <Section title={t("gWrapped")} list={ended} />
     </div>
   );
 }
@@ -47,23 +48,23 @@ function FeedCard({ p, posts, uid, me, a }: { p: Pulse; posts: FeedPost[]; uid: 
       <header onClick={() => a.select(p.id)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") a.select(p.id); }}>
         <span className="fdot" style={{ background: past ? "var(--ghost)" : c.color }} />
         <div className="cbody">
-          <div className="kicker" style={{ color: past ? "var(--muted)" : c.color }}>{c.name.toUpperCase()}</div>
+          <div className="kicker" style={{ color: past ? "var(--muted)" : c.color }}>{catName(p.category)}</div>
           <h4>{p.title}</h4>
-          <div className="meta"><When p={p} /><span>{dist(d)}{past ? "" : ` · ${walkMin(d)} min walk`}</span></div>
+          <div className="meta"><When p={p} /><span>{dist(d)}{past ? "" : ` · ${t("walk", { n: walkMin(d) })}`}</span></div>
           <div className="meta"><Place p={p} /></div>
         </div>
       </header>
       {photo && <img className="fphoto" src={photoSrc(photo)!} alt={`Photo from ${p.title}, ${ago(photo.created_at)}`} loading="lazy" />}
       <div className="fstats">
-        <span><b>{going}</b> {past ? "met up" : "going"}</span>
-        {here > 0 && <span><b>{here}</b> checked in</span>}
-        {!past && <span><b>{Math.max(0, openSpots(p))}</b> spots open</span>}
-        {posts[0] && <span>last update {ago(posts[0].created_at)}</span>}
+        <span>{past ? t("metUp", { n: going }) : <><b>{going}</b> {t("going")}</>}</span>
+        {here > 0 && <span><b>{here}</b> {t("checkedIn")}</span>}
+        {!past && <span>{t("spotsOpen", { n: Math.max(0, openSpots(p)) })}</span>}
+        {posts[0] && <span>{t("lastUpdate", { t: ago(posts[0].created_at) })}</span>}
       </div>
       {text.length > 0 && <div className="thread">{text.map((f) => <PostLine key={f.id} f={f} p={p} uid={uid} />)}</div>}
       {!past && (
         <div className="cfoot">
-          <button className="mini" onClick={() => a.select(p.id)}>See on map</button>
+          <button className="mini" onClick={() => a.select(p.id)}>{t("seeOnMap")}</button>
           <div className="btnrow"><NavButton p={p} /><JoinButton p={p} uid={uid} a={a} /></div>
         </div>
       )}

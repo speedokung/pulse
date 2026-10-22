@@ -3,6 +3,7 @@ import { HOUR, isHost, isOver, ms, pos, status } from "../lib/pulse";
 import { distanceM } from "../lib/geo";
 import { PulseCard } from "./PulseCard";
 import type { Actions } from "./ui";
+import { t } from "../lib/i18n";
 
 /** Everything coming up within range: live first, then by start time. */
 export function nearbyList(pulses: Pulse[], me: LatLng, radiusM: number, uid: string | null) {
@@ -15,15 +16,15 @@ export function nearbyList(pulses: Pulse[], me: LatLng, radiusM: number, uid: st
 const endOfDay = (offsetDays: number) => { const d = new Date(); d.setHours(23, 59, 59, 999); d.setDate(d.getDate() + offsetDays); return d.getTime(); };
 
 export function NearbyTab({ list, uid, me, selectedId, a }: { list: Pulse[]; uid: string | null; me: LatLng; selectedId: string | null; a: Actions }) {
-  if (!list.length) return <div className="empty">Nothing coming up in range.<br />Widen the distance, or drop your own Pulse.</div>;
+  if (!list.length) return <div className="empty" dangerouslySetInnerHTML={{ __html: t("emptyNear") }} />;
   const used = new Set<string>();
   const groups: [string, (p: Pulse) => boolean][] = [
-    ["Live now", (p) => status(p).k === "live"],
-    ["Within the hour", (p) => ms(p.starts_at) - Date.now() <= HOUR],
-    ["Next 3 hours", (p) => ms(p.starts_at) - Date.now() <= 3 * HOUR],
-    ["Later today", (p) => ms(p.starts_at) <= endOfDay(0)],
-    ["Tomorrow", (p) => ms(p.starts_at) <= endOfDay(1)],
-    ["This week", () => true],
+    [t("gLive"), (p) => status(p).k === "live"],
+    [t("gHour"), (p) => ms(p.starts_at) - Date.now() <= HOUR],
+    [t("g3h"), (p) => ms(p.starts_at) - Date.now() <= 3 * HOUR],
+    [t("gToday"), (p) => ms(p.starts_at) <= endOfDay(0)],
+    [t("gTomorrow"), (p) => ms(p.starts_at) <= endOfDay(1)],
+    [t("gWeek"), () => true],
   ];
   return (
     <>

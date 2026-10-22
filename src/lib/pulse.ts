@@ -1,5 +1,6 @@
 import type { LatLng, Pulse } from "./types";
 import { distanceM } from "./geo";
+import { t } from "./i18n";
 
 export const MIN = 60_000, HOUR = 3_600_000, DAY = 86_400_000;
 export const ms = (iso: string) => new Date(iso).getTime();
@@ -24,8 +25,8 @@ export function pos(p: Pulse, now = Date.now()): LatLng {
   return { lat: p.rough_lat, lng: p.rough_lng };
 }
 export const showsExact = (p: Pulse, now = Date.now()) => !isOver(p, now) && !!p.exact;
-export const placeLabel = (p: Pulse, now = Date.now()) => (showsExact(p, now) ? p.exact!.place_name : `Around ${p.area_name}`);
-export const hostName = (p: Pulse, uid: string | null) => (isHost(p, uid) ? "you" : p.host?.display_name || "someone");
+export const placeLabel = (p: Pulse, now = Date.now()) => (showsExact(p, now) ? p.exact!.place_name : t("around", { a: p.area_name }));
+export const hostName = (p: Pulse, uid: string | null) => (isHost(p, uid) ? t("you") : p.host?.display_name || t("someone"));
 
 export const BURY_M = 350;
 /**
