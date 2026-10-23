@@ -3,9 +3,9 @@ import { CATS, catName } from "../lib/categories";
 import { accepted, isHost, isOver, isParticipant, myStatus, pos, showsExact, status } from "../lib/pulse";
 import { distanceM } from "../lib/geo";
 import { dist, walkMin } from "../lib/format";
-import { Actions, Avatar, by, JoinButton, Lock, NavButton, Place, Seats, When } from "./ui";
+import { Actions, Avatar, HostLine, JoinButton, Tags, Lock, NavButton, Place, Seats, When } from "./ui";
 import { Composer, photoSrc, PostLine } from "./Posts";
-import { ContactBox, GroupChat } from "./Contact";
+import { ContactBox, GroupChat, SignalsBox } from "./Contact";
 import { t } from "../lib/i18n";
 
 export function PulseDetail({ p, uid, me, posts, a }: { p: Pulse; uid: string | null; me: LatLng; posts: FeedPost[]; a: Actions }) {
@@ -21,8 +21,9 @@ export function PulseDetail({ p, uid, me, posts, a }: { p: Pulse; uid: string | 
         {past ? `${t("ended")} · ` : ""}{catName(p.category)}
       </div>
       <h3>{p.title}</h3>
+      <Tags p={p} />
       <div className="meta"><When p={p} /></div>
-      <div className="meta"><Place p={p} /><span>{dist(d)}{past ? "" : ` · ${t("walk", { n: walkMin(d) })}`}</span><span>{by(p, uid)}</span></div>
+      <div className="meta"><Place p={p} /><span>{dist(d)}{past ? "" : ` · ${t("walk", { n: walkMin(d) })}`}</span><HostLine p={p} uid={uid} /></div>
       {photo && <img className="detail-photo" src={photoSrc(photo)!} alt={`Photo from ${p.title}`} />}
 
       {!past && showsExact(p) && <NavButton p={p} label={t("navigateG")} />}
@@ -44,6 +45,8 @@ export function PulseDetail({ p, uid, me, posts, a }: { p: Pulse; uid: string | 
           </div>
         </div>
       )}
+
+      <SignalsBox p={p} uid={uid} a={a} />
 
       {host && !past && (
         <>

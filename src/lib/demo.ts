@@ -1,6 +1,6 @@
 // Demo mode: example Pulses around central Bangkok, kept in memory on this device.
 // Used automatically when VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are not set.
-import type { ChatMessage, Contact, FeedPost, MemberStatus, NewPulse, Pulse } from "./types";
+import type { ChatMessage, Contact, FeedPost, Level, MemberStatus, NewPulse, Pulse, Signal } from "./types";
 import { roughen } from "./geo";
 import { DAY, HOUR, MIN } from "./pulse";
 
@@ -18,10 +18,16 @@ const crowd = (k: number, status: MemberStatus = "accepted") =>
 function P(o: {
   id: string; category: Pulse["category"]; title: string; place: string; area: string; host: string;
   lat: number; lng: number; start: number; dur: number; need: number; joined?: number; visibility?: Pulse["visibility"]; created?: number;
+  level?: Level; series?: string; verified?: "google" | "line"; interested?: number; omw?: number[];
 }): Pulse {
   const vis = o.visibility ?? "all";
   return {
-    id: o.id, host_id: "h-" + o.host, host: { display_name: o.host }, category: o.category, title: o.title, need: o.need,
+    id: o.id, host_id: "h-" + o.host, host: { display_name: o.host, verified: o.verified ?? null }, category: o.category, title: o.title, need: o.need,
+    level: o.level ?? "any", series_id: o.series ?? null,
+    pulse_signals: [
+      ...Array.from({ length: o.interested ?? 0 }, (_, i): Signal => ({ user_id: `int-${o.id}-${i}`, kind: "interested", eta_min: null, updated_at: iso(T - 20 * MIN) })),
+      ...(o.omw ?? []).map((eta, i): Signal => ({ user_id: `ex${i}`, kind: "omw", eta_min: eta, updated_at: iso(T - 2 * MIN) })),
+    ],
     starts_at: iso(o.start), ends_at: iso(o.start + o.dur * MIN), visibility: vis, area_name: o.area,
     rough_lat: roughen(o.lat), rough_lng: roughen(o.lng), created_at: iso(o.created ?? o.start - 10 * MIN),
     memberships: crowd(o.joined ?? 0),
@@ -35,13 +41,13 @@ const hidden: Record<string, { lat: number; lng: number; place_name: string }> =
 };
 
 let pulses: Pulse[] = [
-  P({ id: "ex-pickle", category: "sport", title: "ขาด 2 คน พิกเกิลบอลคู่", place: "คอร์ต 3 สนามสวนลุมพินี", area: "ลุมพินี", host: "ใหม่", lat: 13.7298, lng: 100.5395, start: T - 15 * MIN, dur: 75, need: 2, created: T - 20 * MIN }),
-  P({ id: "ex-jam", category: "music", title: "เล่นกีตาร์โปร่งริมน้ำ มานั่งฟังได้", place: "สนามหญ้าริมน้ำ สวนลุมพินี", area: "ลุมพินี", host: "ต้น", lat: 13.7316, lng: 100.5424, start: T - 30 * MIN, dur: 90, need: 4, joined: 2 }),
+  P({ id: "ex-pickle", category: "sport", title: "ขาด 2 คน พิกเกิลบอลคู่", place: "คอร์ต 3 สนามสวนลุมพินี", area: "ลุมพินี", host: "ใหม่", verified: "google", level: "casual", interested: 3, lat: 13.7298, lng: 100.5395, start: T - 15 * MIN, dur: 75, need: 2, created: T - 20 * MIN }),
+  P({ id: "ex-jam", category: "music", title: "เล่นกีตาร์โปร่งริมน้ำ มานั่งฟังได้", place: "สนามหญ้าริมน้ำ สวนลุมพินี", area: "ลุมพินี", host: "ต้น", verified: "line", level: "any", omw: [5, 12], interested: 2, lat: 13.7316, lng: 100.5424, start: T - 30 * MIN, dur: 90, need: 4, joined: 2 }),
   P({ id: "ex-catan", category: "games", title: "Catan ขาด 1 ที่", place: "", area: "สามย่าน", host: "บี", lat: 13.7337, lng: 100.5287, start: T + 25 * MIN, dur: 120, need: 1, visibility: "accepted" }),
-  P({ id: "ex-run", category: "outdoor", title: "วิ่งชิลตอนเย็น 5 กม.", place: "สวนป่าเบญจกิติ ทางขึ้นสกายวอล์ก", area: "เบญจกิติ", host: "แนท", lat: 13.7296, lng: 100.5594, start: T + 55 * MIN, dur: 45, need: 5, joined: 2 }),
-  P({ id: "ex-hoops", category: "sport", title: "บาส 3 ต่อ 3 ครึ่งสนาม", place: "สนามบาส สนามกีฬาจุฬาฯ", area: "ปทุมวัน", host: "เจ", lat: 13.7389, lng: 100.5266, start: T + 10 * MIN, dur: 60, need: 3, joined: 1 }),
+  P({ id: "ex-run", category: "outdoor", title: "วิ่งชิลตอนเย็น 5 กม.", place: "สวนป่าเบญจกิติ ทางขึ้นสกายวอล์ก", area: "เบญจกิติ", host: "แนท", verified: "google", level: "beginner", interested: 4, series: "run-weekly", lat: 13.7296, lng: 100.5594, start: T + 55 * MIN, dur: 45, need: 5, joined: 2 }),
+  P({ id: "ex-hoops", category: "sport", title: "บาส 3 ต่อ 3 ครึ่งสนาม", place: "สนามบาส สนามกีฬาจุฬาฯ", area: "ปทุมวัน", host: "เจ", level: "serious", lat: 13.7389, lng: 100.5266, start: T + 10 * MIN, dur: 60, need: 3, joined: 1 }),
   P({ id: "ex-futsal", category: "sport", title: "ฟุตซอล 5 คน ขาด 3", place: "สนามฟุตซอลสยาม คอร์ต B", area: "สยาม", host: "อาร์ม", lat: 13.7466, lng: 100.5318, start: T + 130 * MIN, dur: 60, need: 3 }),
-  P({ id: "ex-boardnight", category: "games", title: "บอร์ดเกมไนท์ มือใหม่ก็มาได้", place: "ร้านบอร์ดเกม สามย่านมิตรทาวน์ ชั้น 2", area: "สามย่าน", host: "บี", lat: 13.7337, lng: 100.5287, start: new Date(new Date(T + DAY).setHours(19, 0, 0, 0)).getTime(), dur: 180, need: 6, joined: 2 }),
+  P({ id: "ex-boardnight", category: "games", title: "บอร์ดเกมไนท์ มือใหม่ก็มาได้", place: "ร้านบอร์ดเกม สามย่านมิตรทาวน์ ชั้น 2", area: "สามย่าน", host: "บี", level: "beginner", series: "bg-weekly", lat: 13.7337, lng: 100.5287, start: new Date(new Date(T + DAY).setHours(19, 0, 0, 0)).getTime(), dur: 180, need: 6, joined: 2 }),
   P({ id: "ex-sketch", category: "make", title: "สเก็ตช์ภาพปากคลองตลาด ทุกระดับ", place: "", area: "ปากคลองตลาด", host: "พลอย", lat: 13.7436, lng: 100.5003, start: T + 90 * MIN, dur: 90, need: 6, joined: 3, visibility: "accepted" }),
   // ended: history, buried under newer Pulses nearby
   P({ id: "ex-uke", category: "music", title: "วงอูคูเลเล่", place: "สนามหญ้าริมน้ำ สวนลุมพินี", area: "ลุมพินี", host: "ฝน", lat: 13.7312, lng: 100.5418, start: T - DAY, dur: 60, need: 5, joined: 5 }),
@@ -90,16 +96,34 @@ export const demoFeed = (ids: string[]) => clone(posts.filter((p) => ids.include
 function find(id: string) { const p = pulses.find((x) => x.id === id); if (!p) throw new Error("Pulse not found"); return p; }
 
 export function demoCreate(np: NewPulse): string {
-  const id = "local-" + Date.now().toString(36);
-  const start = Date.now() + np.startInMin * MIN;
-  pulses.unshift({
-    id, host_id: DEMO_UID, host: { display_name: "คุณ" }, category: np.category, title: np.title, need: np.need,
-    starts_at: iso(start), ends_at: iso(start + np.durationMin * MIN), visibility: np.visibility, area_name: np.area || "Nearby",
-    rough_lat: roughen(np.lat), rough_lng: roughen(np.lng), created_at: iso(Date.now()), memberships: [],
-    exact: { lat: np.lat, lng: np.lng, place_name: np.place || np.area || "จุดที่ปักหมุด" },
-  });
-  if (np.contact.line_id || np.contact.phone || np.contact.landmark) contacts[id] = np.contact;
-  emit(); return id;
+  const base = "local-" + Date.now().toString(36);
+  const series = np.repeatWeeks > 1 ? base : null;
+  for (let w = np.repeatWeeks - 1; w >= 0; w--) {
+    const id = w ? `${base}-w${w}` : base;
+    const start = Date.now() + np.startInMin * MIN + w * 7 * DAY;
+    pulses.unshift({
+      id, host_id: DEMO_UID, host: { display_name: "คุณ" }, category: np.category, title: np.title, need: np.need,
+      starts_at: iso(start), ends_at: iso(start + np.durationMin * MIN), visibility: np.visibility, area_name: np.area || "Nearby",
+      rough_lat: roughen(np.lat), rough_lng: roughen(np.lng), created_at: iso(Date.now()), memberships: [],
+      exact: { lat: np.lat, lng: np.lng, place_name: np.place || np.area || "จุดที่ปักหมุด" },
+      level: np.level, series_id: series, pulse_signals: [],
+    });
+    if (np.contact.line_id || np.contact.phone || np.contact.landmark) contacts[id] = np.contact;
+  }
+  emit(); return base;
+}
+export function demoSignal(id: string, kind: Signal["kind"] | null, eta: number | null) {
+  const p = find(id);
+  p.pulse_signals = (p.pulse_signals ?? []).filter((s) => s.user_id !== DEMO_UID);
+  if (kind) p.pulse_signals.push({ user_id: DEMO_UID, kind, eta_min: eta, updated_at: iso(Date.now()) });
+  emit();
+}
+export function demoHostStats(ids: string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const p of pulses) if (ids.includes(p.host_id) && new Date(p.ends_at).getTime() < Date.now() && p.memberships.some((m) => m.status === "accepted")) out[p.host_id] = (out[p.host_id] || 0) + 1;
+  // the example hosts have been around for a while
+  for (const id of ids) if (id.startsWith("h-")) out[id] = (out[id] || 0) + ({ "h-ใหม่": 23, "h-ต้น": 9, "h-บี": 14, "h-แนท": 31 } as Record<string, number>)[id] || out[id] || 0;
+  return out;
 }
 export function demoJoin(id: string): MemberStatus {
   const p = find(id);

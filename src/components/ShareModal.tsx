@@ -5,6 +5,7 @@ import type { Lang } from "../lib/i18n";
 import { drawCard, drawPoster, shareImage } from "../lib/shareCard";
 import { isOver } from "../lib/pulse";
 import { copy } from "./GrowTab";
+import { shareToLine } from "../lib/line";
 import { t } from "../lib/i18n";
 
 export function ShareModal({ target, lang, setLang, onClose, toast }: {
@@ -51,6 +52,7 @@ export function ShareModal({ target, lang, setLang, onClose, toast }: {
           <button className="ghostbtn" onClick={onClose}>{t("close")}</button>
           <button className="ghostbtn" onClick={() => copy(link, toast)}>{t("mCopyLink")}</button>
           {!poster && <button className="ghostbtn" onClick={() => copy(caption, toast)}>{t("mCopyCaption")}</button>}
+          <button className="ghostbtn line" onClick={() => shareToLine(caption || link, poster ? undefined : target)}>{t("shareLine")}</button>
           <button className="go" onClick={share} disabled={!canvas}>{t("mShareImg")}</button>
         </div>
       </div>

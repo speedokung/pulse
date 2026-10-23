@@ -2,8 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Category, LatLng, Pulse } from "./lib/types";
 import { CAT_KEYS, CATS, catName, RADII, RadiusKey } from "./lib/categories";
 import { configured } from "./lib/supabase";
-import { createPulse, endPulse, extendPulse, sendMessage, setContact, errText, joinPulse, leavePulse, postToFeed, respondRequest, searchHistory } from "./lib/api";
-import { isOver, pos, status } from "./lib/pulse";
+import { createPulse, endPulse, extendPulse, hostStats, sendMessage, setContact, setSignal, errText, joinPulse, leavePulse, postToFeed, respondRequest, searchHistory } from "./lib/api";
+import { accepted, DAY, isOver, ms, pos, status } from "./lib/pulse";
+import { distanceM } from "./lib/geo";
+import { setHostStats } from "./lib/trust";
+import { closeLine, completeLineLink } from "./lib/line";
+import { canPromptInstall, isIos, isStandalone, onInstallChange, promptInstall } from "./lib/pwa";
 import { getLang, setLang as setUiLang, t, t as tr, type Lang } from "./lib/i18n";
 import { prefs, useLiveData, useLocation, useTick } from "./hooks";
 import { useAuth } from "./auth";
@@ -117,6 +121,57 @@ export default function App() {
     try { await fn(); if (ok) toast(ok); data.reload(); return true; } catch (e) { toast(errText(e)); return false; }
   };
 
+  // how many meetups each host has run (for the trust line on cards)
+  const [, setStatsV] = useState(0);
+  const hostKey = [...new Set(data.pulses.map((p) => p.host_id))].sort().join(",");
+  useEffect(() => {
+    if (!hostKey) return;
+    hostStats(hostKey.split(",")).then((s) => { setHostStats(s); setStatsV((v) => v + 1); });
+  }, [hostKey]);
+
+  // social proof: people who met up within 5 km this week
+  const proof = useMemo(() => {
+    const wk = data.pulses.filter((p) => isOver(p) && Date.now() - ms(p.ends_at) < 7 * DAY && distanceM(loc.me, pos(p)) < 5000);
+    return { groups: wk.length, people: wk.reduce((n, p) => n + accepted(p).length + 1, 0) };
+  }, [data.pulses, loc.me]);
+
+  // shared from the Google Maps app (Android "Share → แถว"): open the form with the link
+  useEffect(() => {
+    if (location.pathname !== "/share") return;
+    const q = new URLSearchParams(location.search);
+    const text = [q.get("title"), q.get("text"), q.get("url")].filter(Boolean).join("\n");
+    history.replaceState(null, "", "/");
+    if (!text) return;
+    setDrop({ pin: loc.me, prefill: { where: text }, k: Date.now() });
+    if (window.innerWidth < 820) setTab("map");
+    toast(t("fShared"));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // home-screen shortcut "ตั้งก๊วน" (?new=1)
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("new") !== "1") return;
+    history.replaceState(null, "", "/");
+    setTimeout(() => openDrop(), 300);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // opened inside LINE to link this LINE account (?link=<code>)
+  useEffect(() => {
+    const code = new URLSearchParams(location.search).get("link");
+    if (!code) return;
+    completeLineLink(code).then((r) => {
+      if (r === "redirecting") return;
+      const clean = new URL(location.href); clean.searchParams.delete("link"); history.replaceState(null, "", clean.toString());
+      if (r.ok) { toast(t("lineDone")); setTimeout(closeLine, 2500); }
+      else toast(t("lineFail", { e: r.error ?? "" }));
+    }).catch((e) => toast(t("lineFail", { e: String(e?.message ?? e) })));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Install app" (Android prompt, iPhone instructions)
+  const [, setInstallV] = useState(0);
+  useEffect(() => onInstallChange(() => setInstallV((v) => v + 1)), []);
+  const [installDismissed, setInstallDismissed] = useState(() => prefs.read("installDismissed", false));
+  const showInstall = !installDismissed && !isStandalone() && (canPromptInstall() || isIos());
+
   const a: Actions = {
     select,
     join: (p) => { if (needName(t("whyJoin"))) return;
@@ -134,6 +189,10 @@ export default function App() {
     },
     chat: async (p, body) => { try { await sendMessage(p.id, body); return true; } catch (e) { toast(errText(e)); return false; } },
     saveContact: (p, c) => run(() => setContact(p.id, c), t("cSaved")),
+    signal: (p, kind, eta = null) => {
+      if (!uid) return;
+      run(() => setSignal(uid, p.id, kind, eta), kind === "omw" ? t("tOmw") : kind === "interested" ? t("tInterested") : undefined);
+    },
     post: async (p, kind, body, file) => {
       if (needName(t("whyPost"))) return false;
       return run(() => postToFeed(uid!, p.id, kind, body, file), kind === "checkin" ? t("tCheckedIn") : t("tPosted"));
@@ -216,6 +275,16 @@ export default function App() {
         </div>
         <div className="list">
           {!configured && <div className="banner">{t("demoBanner")}</div>}
+          {panelTab === "near" && proof.people >= 3 && <div className="banner proof"><span>{t("proof", { p: proof.people, g: proof.groups })}</span></div>}
+          {showInstall && panelTab === "near" && (
+            <div className="banner install">
+              <span><b>{t("install")}</b> · {canPromptInstall() ? t("installWhy") : t("installIos")}</span>
+              <span className="btnrow">
+                {canPromptInstall() && <button onClick={async () => { if (await promptInstall()) toast(t("installDone")); }}>{t("install")}</button>}
+                <button onClick={() => { setInstallDismissed(true); prefs.write("installDismissed", true); }}>{t("dismiss")}</button>
+              </span>
+            </div>
+          )}
           {loc.source === "default" && <div className="banner"><span>{t("locOff")}</span><button onClick={() => setPlacing("me")}>{t("setMySpot")}</button></div>}
           {data.error && <div className="banner">{t("loadFail", { e: data.error })}</div>}
           {data.loading && !data.pulses.length ? <div className="empty">{t("loading")}</div> : (
@@ -236,7 +305,7 @@ export default function App() {
       </nav>
 
       {share && <ShareModal target={share} lang={capLang} setLang={setCapLang} onClose={() => setShare(null)} toast={toast} />}
-      {profileOpen && <ProfileSheet auth={auth} reason={profileOpen.reason} onClose={() => setProfileOpen(null)} toast={toast} />}
+      {profileOpen && <ProfileSheet auth={auth} me={loc.me} reason={profileOpen.reason} onClose={() => setProfileOpen(null)} toast={toast} />}
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
     </div>
   );

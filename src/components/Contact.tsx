@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChatMessage, Contact, Pulse } from "../lib/types";
+import type { ChatMessage, Contact, Pulse, Signal } from "../lib/types";
 import { errText, loadMessages, subscribeChat } from "../lib/api";
 import { isHost, isOver, isParticipant, ms } from "../lib/pulse";
 import { clock } from "../lib/format";
 import { t, type Key } from "../lib/i18n";
-import { Avatar, Lock, type Actions } from "./ui";
+import { Avatar, Lock, mySignal, SignalSummary, signalsOf, type Actions } from "./ui";
 
 const lineUrl = (id: string) => `https://line.me/ti/p/~${encodeURIComponent(id.replace(/^@/, ""))}`;
 const telUrl = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
@@ -118,6 +118,47 @@ export function GroupChat({ p, uid, a }: { p: Pulse; uid: string | null; a: Acti
           </form>
         </>
       )}
+    </div>
+  );
+}
+
+const ETAS = [5, 10, 20, 30];
+/** "Interested" for people deciding, "On my way · 10 min" for people who joined, and the list for the host. */
+export function SignalsBox({ p, uid, a }: { p: Pulse; uid: string | null; a: Actions }) {
+  if (isOver(p)) return null;
+  const host = isHost(p, uid), member = isParticipant(p, uid);
+  const mine = mySignal(p, uid);
+  const sig = signalsOf(p);
+  if (host) {
+    const coming = sig.filter((s) => s.kind === "omw");
+    const name = (id: string) => p.memberships.find((m) => m.user_id === id)?.profile?.display_name || t("someone");
+    const arrive = (s: Signal) => Math.max(1, Math.round((ms(s.updated_at) + (s.eta_min ?? 0) * 60_000 - Date.now()) / 60_000));
+    const ints = sig.filter((s) => s.kind === "interested").length;
+    if (!coming.length && !ints) return null;
+    return (
+      <div className="signalbox">
+        {coming.length > 0 && <div><b>{t("sComingList")}:</b> {coming.map((s) => `${name(s.user_id)} ${t("sEta", { n: arrive(s) })}`).join(", ")}</div>}
+        {ints > 0 && <div className="sub">{t("sInterestedN", { n: ints })}</div>}
+      </div>
+    );
+  }
+  if (member) {
+    if (mine?.kind === "omw") {
+      const at = clock(ms(mine.updated_at) + (mine.eta_min ?? 0) * 60_000);
+      return <div className="signalbox row"><span>{t("sYouOmw", { t: at })}</span><button className="mini" onClick={() => a.signal(p, null)}>{t("sCancel")}</button></div>;
+    }
+    return (
+      <div className="signalbox row">
+        <b>{t("sOmw")}</b>
+        {ETAS.map((n) => <button key={n} className="chip" onClick={() => a.signal(p, "omw", n)}>{t("sOmwIn", { n })}</button>)}
+      </div>
+    );
+  }
+  const on = mine?.kind === "interested";
+  return (
+    <div className="signalbox row">
+      <button className={`chip${on ? " on" : ""}`} aria-pressed={on} onClick={() => a.signal(p, on ? null : "interested")}>{on ? `★ ${t("sInterestedOn")}` : `☆ ${t("sInterested")}`}</button>
+      <SignalSummary p={p} />
     </div>
   );
 }

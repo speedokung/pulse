@@ -135,32 +135,46 @@ create policy "authors delete own posts" on public.feed_posts for delete to auth
   using (author_id = auth.uid());
 
 -- ---------- actions ----------
+-- skill level and weekly repeats
+alter table public.pulses add column if not exists level text not null default 'any' check (level in ('any','beginner','casual','serious'));
+alter table public.pulses add column if not exists series_id uuid;
+create index if not exists pulses_series on public.pulses (series_id);
+
+drop function if exists public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text);
 create or replace function public.create_pulse(
   p_category pulse_category, p_title text, p_need int,
   p_starts_at timestamptz, p_duration_min int, p_visibility exact_visibility,
-  p_lat double precision, p_lng double precision, p_place text, p_area text
+  p_lat double precision, p_lng double precision, p_place text, p_area text,
+  p_level text default 'any', p_repeat_weeks int default 1
 ) returns uuid
 language plpgsql security definer set search_path = public as $$
-declare v_uid uuid := auth.uid(); v_id uuid; v_start timestamptz;
+declare v_uid uuid := auth.uid(); v_id uuid; v_first uuid; v_start timestamptz; v_series uuid; i int;
 begin
   if v_uid is null then raise exception 'Sign in first'; end if;
   if p_starts_at > now() + interval '7 days' then raise exception 'Pick a start within the next 7 days'; end if;
   if p_starts_at < now() - interval '10 minutes' then raise exception 'That start time has passed'; end if;
   if p_duration_min not between 15 and 720 then raise exception 'Duration must be 15 min to 12 h'; end if;
-  if (select count(*) from pulses where host_id = v_uid and ends_at > now()) >= 5 then
+  if p_repeat_weeks not between 1 and 8 then raise exception 'Repeat 1 to 8 weeks'; end if;
+  -- a weekly series counts as one
+  if (select count(distinct coalesce(series_id, id)) from pulses where host_id = v_uid and ends_at > now()) >= 5 then
     raise exception 'You already have 5 upcoming Pulses. End one first.';
   end if;
   insert into profiles (id) values (v_uid) on conflict do nothing;
-  v_start := greatest(p_starts_at, now());
-  insert into pulses (host_id, category, title, need, starts_at, ends_at, visibility, area_name, rough_lat, rough_lng)
-  values (v_uid, p_category, trim(p_title), p_need, v_start, v_start + make_interval(mins => p_duration_min),
-          p_visibility, coalesce(nullif(trim(p_area), ''), 'Nearby'),
-          floor(p_lat / 0.003) * 0.003 + 0.0015,
-          floor(p_lng / 0.003) * 0.003 + 0.0015)
-  returning id into v_id;
-  insert into pulse_locations (pulse_id, lat, lng, place_name)
-  values (v_id, p_lat, p_lng, coalesce(nullif(trim(p_place), ''), nullif(trim(p_area), ''), 'Pinned spot'));
-  return v_id;
+  v_series := case when p_repeat_weeks > 1 then gen_random_uuid() else null end;
+  for i in 0 .. p_repeat_weeks - 1 loop
+    v_start := greatest(p_starts_at, now()) + make_interval(days => 7 * i);
+    insert into pulses (host_id, category, title, need, starts_at, ends_at, visibility, area_name, rough_lat, rough_lng, level, series_id)
+    values (v_uid, p_category, trim(p_title), p_need, v_start, v_start + make_interval(mins => p_duration_min),
+            p_visibility, coalesce(nullif(trim(p_area), ''), 'Nearby'),
+            floor(p_lat / 0.003) * 0.003 + 0.0015,
+            floor(p_lng / 0.003) * 0.003 + 0.0015,
+            coalesce(p_level, 'any'), v_series)
+    returning id into v_id;
+    insert into pulse_locations (pulse_id, lat, lng, place_name)
+    values (v_id, p_lat, p_lng, coalesce(nullif(trim(p_place), ''), nullif(trim(p_area), ''), 'Pinned spot'));
+    if i = 0 then v_first := v_id; end if;
+  end loop;
+  return v_first;
 end $$;
 
 create or replace function public.join_pulse(p_id uuid) returns text
@@ -225,13 +239,13 @@ begin
   where id = p_id and host_id = auth.uid() and ends_at > now();
 end $$;
 
-revoke all on function public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text) from public, anon;
+revoke all on function public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text,text,int) from public, anon;
 revoke all on function public.join_pulse(uuid)               from public, anon;
 revoke all on function public.leave_pulse(uuid)              from public, anon;
 revoke all on function public.respond_request(uuid,uuid,boolean) from public, anon;
 revoke all on function public.end_pulse(uuid)                from public, anon;
 revoke all on function public.extend_pulse(uuid,int)          from public, anon;
-grant execute on function public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text) to authenticated;
+grant execute on function public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text,text,int) to authenticated;
 grant execute on function public.join_pulse(uuid)               to authenticated;
 grant execute on function public.leave_pulse(uuid)              to authenticated;
 grant execute on function public.respond_request(uuid,uuid,boolean) to authenticated;
@@ -264,8 +278,12 @@ create or replace function public.set_pulse_contact(p_id uuid, p_line text, p_ph
 language plpgsql security definer set search_path = public as $$
 begin
   if not exists (select 1 from pulses where id = p_id and host_id = auth.uid()) then raise exception 'Only the host can do that'; end if;
+  -- applies to every upcoming Pulse in the same weekly series too
   insert into pulse_private (pulse_id, line_id, phone, landmark)
-  values (p_id, nullif(trim(p_line), ''), nullif(trim(p_phone), ''), nullif(trim(p_landmark), ''))
+  select x.id, nullif(trim(p_line), ''), nullif(trim(p_phone), ''), nullif(trim(p_landmark), '')
+  from pulses x
+  where x.host_id = auth.uid()
+    and (x.id = p_id or (x.series_id is not null and x.series_id = (select series_id from pulses where id = p_id) and x.ends_at > now()))
   on conflict (pulse_id) do update set line_id = excluded.line_id, phone = excluded.phone, landmark = excluded.landmark;
 end $$;
 revoke all on function public.set_pulse_contact(uuid,text,text,text) from public, anon;
@@ -290,6 +308,107 @@ create policy "members write chat" on public.pulse_messages for insert to authen
 do $$ begin
   alter publication supabase_realtime add table public.pulse_messages;
 exception when duplicate_object then null; end $$;
+
+-- ---------- "interested" and "on my way" ----------
+create table if not exists public.pulse_signals (
+  pulse_id   uuid not null references public.pulses(id) on delete cascade,
+  user_id    uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  kind       text not null check (kind in ('interested','omw')),
+  eta_min    int check (eta_min is null or eta_min between 1 and 180),
+  updated_at timestamptz not null default now(),
+  primary key (pulse_id, user_id)
+);
+alter table public.pulse_signals enable row level security;
+drop policy if exists "signals are public" on public.pulse_signals;
+drop policy if exists "own signals insert" on public.pulse_signals;
+drop policy if exists "own signals update" on public.pulse_signals;
+drop policy if exists "own signals delete" on public.pulse_signals;
+create policy "signals are public" on public.pulse_signals for select using (true);
+create policy "own signals insert" on public.pulse_signals for insert to authenticated
+  with check (user_id = auth.uid() and (kind = 'interested' or public.is_member(pulse_id)));
+create policy "own signals update" on public.pulse_signals for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid() and (kind = 'interested' or public.is_member(pulse_id)));
+create policy "own signals delete" on public.pulse_signals for delete to authenticated using (user_id = auth.uid());
+do $$ begin
+  alter publication supabase_realtime add table public.pulse_signals;
+exception when duplicate_object then null; end $$;
+
+-- ---------- trust: verified badge + how many meetups someone has hosted ----------
+alter table public.profiles add column if not exists verified text check (verified is null or verified in ('google','line'));
+
+-- called by the app after Google sign-in; marks the profile verified if a Google identity is really attached
+create or replace function public.sync_verified() returns text
+language plpgsql security definer set search_path = public, auth as $$
+declare v text;
+begin
+  select case
+    when exists (select 1 from auth.identities where user_id = auth.uid() and provider = 'google') then 'google'
+    when exists (select 1 from line_links where user_id = auth.uid()) then 'line'
+    else null end into v;
+  update profiles set verified = v where id = auth.uid();
+  return v;
+end $$;
+
+-- ended Pulses where at least one other person was accepted
+create or replace function public.host_stats(p_ids uuid[]) returns table (host_id uuid, hosted int)
+language sql stable security definer set search_path = public as $$
+  select p.host_id, count(*)::int
+  from pulses p
+  where p.host_id = any(p_ids) and p.ends_at < now()
+    and exists (select 1 from memberships m where m.pulse_id = p.id and m.status = 'accepted')
+  group by p.host_id;
+$$;
+
+-- ---------- LINE: linked accounts + notification settings ----------
+create table if not exists public.line_links (
+  user_id      uuid primary key references public.profiles(id) on delete cascade,
+  line_user_id text not null unique,
+  line_name    text,
+  linked_at    timestamptz not null default now()
+);
+alter table public.line_links enable row level security;
+drop policy if exists "own line link" on public.line_links;
+create policy "own line link" on public.line_links for select using (user_id = auth.uid());
+-- written only by the server (Cloudflare Worker with the service role key)
+
+create table if not exists public.line_link_codes (
+  code       text primary key,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  expires_at timestamptz not null default now() + interval '15 minutes'
+);
+alter table public.line_link_codes enable row level security; -- no policies: server only
+
+create or replace function public.start_line_link() returns text
+language plpgsql security definer set search_path = public as $$
+declare v text := replace(gen_random_uuid()::text, '-', '');
+begin
+  if auth.uid() is null then raise exception 'Sign in first'; end if;
+  insert into profiles (id) values (auth.uid()) on conflict do nothing;
+  delete from line_link_codes where user_id = auth.uid() or expires_at < now();
+  insert into line_link_codes (code, user_id) values (v, auth.uid());
+  return v;
+end $$;
+
+create table if not exists public.notify_prefs (
+  user_id    uuid primary key default auth.uid() references public.profiles(id) on delete cascade,
+  enabled    boolean not null default true,
+  categories pulse_category[] not null default '{}',
+  lat        double precision not null,
+  lng        double precision not null,
+  radius_m   int not null default 2000 check (radius_m between 300 and 15000),
+  last_sent  timestamptz,
+  updated_at timestamptz not null default now()
+);
+alter table public.notify_prefs enable row level security;
+drop policy if exists "own notify prefs" on public.notify_prefs;
+create policy "own notify prefs" on public.notify_prefs for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+revoke all on function public.sync_verified() from public, anon;
+revoke all on function public.start_line_link() from public, anon;
+grant execute on function public.sync_verified() to authenticated;
+grant execute on function public.start_line_link() to authenticated;
+grant execute on function public.host_stats(uuid[]) to anon, authenticated;
 
 -- ---------- photo storage ----------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

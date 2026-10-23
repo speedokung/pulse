@@ -2,7 +2,7 @@ import type { LatLng, Pulse } from "../lib/types";
 import { accepted, isOver, pos } from "../lib/pulse";
 import { distanceM } from "../lib/geo";
 import { dist, walkMin } from "../lib/format";
-import { Actions, by, Glyph, JoinButton, NavButton, Place, Seats, When } from "./ui";
+import { Actions, Glyph, HostLine, JoinButton, NavButton, Place, Seats, SignalSummary, signalsOf, Tags, When } from "./ui";
 import { t } from "../lib/i18n";
 
 export function PulseCard({ p, uid, me, sel, a }: { p: Pulse; uid: string | null; me: LatLng; sel: boolean; a: Actions }) {
@@ -12,9 +12,10 @@ export function PulseCard({ p, uid, me, sel, a }: { p: Pulse; uid: string | null
       onKeyDown={(e) => { if (e.key === "Enter") a.select(p.id); }}>
       <Glyph p={p} />
       <div className="cbody">
-        <p className="ctitle">{p.title}</p>
+        <p className="ctitle">{p.title} <Tags p={p} /></p>
         <div className="meta"><When p={p} /></div>
-        <div className="meta"><Place p={p} /><span>{dist(d)}{past ? "" : ` · ${t("walk", { n: walkMin(d) })}`}</span><span>{by(p, uid)}</span></div>
+        <div className="meta"><Place p={p} /><span>{dist(d)}{past ? "" : ` · ${t("walk", { n: walkMin(d) })}`}</span><HostLine p={p} uid={uid} /></div>
+        {!past && signalsOf(p).length > 0 && <div className="meta"><SignalSummary p={p} /></div>}
         {past ? (
           <div className="cfoot">
             <span className="meta">{t("metUp", { n: accepted(p).length + 1 })}</span>

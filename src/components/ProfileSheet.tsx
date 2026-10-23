@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { LatLng } from "../lib/types";
+import { loadNotifyPrefs, myLineLink, saveNotifyPrefs, startLineLink } from "../lib/api";
+import { completeLineLink, inLineApp, lineConfigured, openLineToLink } from "../lib/line";
 import type { Category } from "../lib/types";
 import { CAT_KEYS, CATS, catName } from "../lib/categories";
 import { configured } from "../lib/supabase";
@@ -18,7 +21,7 @@ const G = () => (
 /**
  * Profile + sign-in. `reason` is set when someone tries to join/post/drop without a name yet.
  */
-export function ProfileSheet({ auth, reason, onClose, toast }: { auth: Auth; reason: string | null; onClose: () => void; toast: (s: string) => void }) {
+export function ProfileSheet({ auth, me, reason, onClose, toast }: { auth: Auth; me: LatLng; reason: string | null; onClose: () => void; toast: (s: string) => void }) {
   const [name, setName] = useState(auth.profile?.display_name && auth.profile.display_name !== "Someone" ? auth.profile.display_name : "");
   const [interests, setInterests] = useState<Category[]>(auth.profile?.interests ?? []);
   const [busy, setBusy] = useState(false);
@@ -69,12 +72,68 @@ export function ProfileSheet({ auth, reason, onClose, toast }: { auth: Auth; rea
             </button>
           ))}
         </div>
+        {!reason && <LineSection auth={auth} me={me} interests={interests} toast={toast} />}
         <div className="btns">
           {!auth.isGuest && <button type="button" className="ghostbtn" onClick={async () => { await auth.signOut(); toast(t("pfSignedOut")); onClose(); }}>{t("pfSignOut")}</button>}
           <button type="button" className="ghostbtn" onClick={onClose}>{reason ? t("pfNotNow") : t("close")}</button>
           <button type="submit" className="go" disabled={busy || !name.trim()}>{reason ? t("pfContinue") : t("pfSave")}</button>
         </div>
       </form>
+    </div>
+  );
+}
+
+const RADIUS_OPTS = [1000, 2000, 5000];
+function LineSection({ auth, me, interests, toast }: { auth: Auth; me: LatLng; interests: Category[]; toast: (s: string) => void }) {
+  const [linked, setLinked] = useState<{ line_name: string | null } | null>(null);
+  const [enabled, setEnabled] = useState(false);
+  const [radius, setRadius] = useState(2000);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!configured || !auth.uid) return;
+    myLineLink(auth.uid).then(setLinked);
+    loadNotifyPrefs(auth.uid).then((p) => { if (p) { setEnabled(p.enabled); setRadius(p.radius_m); } });
+  }, [auth.uid]);
+
+  const link = async () => {
+    try {
+      setBusy(true);
+      const code = await startLineLink();
+      if (inLineApp()) {
+        const r = await completeLineLink(code);
+        if (r !== "redirecting") { if (r.ok) { toast(t("lineDone")); setLinked({ line_name: r.name ?? null }); } else toast(t("lineFail", { e: r.error ?? "" })); }
+      } else { toast(t("lineOpening")); openLineToLink(code); }
+    } catch (e) { toast(t("lineFail", { e: (e as Error).message })); }
+    finally { setBusy(false); }
+  };
+  const save = async (on: boolean, r = radius) => {
+    if (!auth.uid) return;
+    setEnabled(on); setRadius(r);
+    try { await saveNotifyPrefs(auth.uid, { enabled: on, categories: interests, lat: me.lat, lng: me.lng, radius_m: r }); toast(t("notifySaved")); }
+    catch { toast(t("pfSaveFail")); }
+  };
+
+  return (
+    <div className="linesec">
+      <div className="f-label">{t("notifyTitle")}</div>
+      {!configured || !lineConfigured ? <div className="sub">{t("lineOff")}</div> : (
+        <>
+          {linked
+            ? <div className="sub"><span className="lineok">LINE</span> {t("lineLinked", { n: linked.line_name ? ` · ${linked.line_name}` : "" })}</div>
+            : <><div className="sub">{t("lineWhy")}</div><button type="button" className="mini line" disabled={busy} onClick={link}>{t("lineLink")}</button></>}
+          <label className="toggle" htmlFor="nt-on">
+            <input id="nt-on" type="checkbox" checked={enabled} disabled={!linked} onChange={(e) => save(e.target.checked)} />
+            <span>{linked ? t("notifyOn") : t("notifyNeedLine")}</span>
+          </label>
+          {linked && enabled && (
+            <div className="row" role="group" aria-label={t("notifyRadius")}>
+              <span className="f-label">{t("notifyRadius")}</span>
+              {RADIUS_OPTS.map((m) => <button type="button" key={m} className="chip" aria-pressed={radius === m} onClick={() => save(true, m)}>{m / 1000} {t("km")}</button>)}
+            </div>
+          )}
+          {linked && <div className="sub">{t("notifyCats")}</div>}
+        </>
+      )}
     </div>
   );
 }

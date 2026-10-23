@@ -1,8 +1,14 @@
-   {
-     "name": "pulse",
-     "compatibility_date": "2025-09-01",
-     "assets": {
-       "directory": "./dist",
-       "not_found_handling": "single-page-application"
-     }
-   }
+{
+  // Cloudflare Worker: serves the app from ./dist and runs worker/index.ts for /api/* and shared links.
+  // Keep "name" the same as your Worker in the Cloudflare dashboard.
+  "name": "pulse",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/"]
+  },
+  "observability": { "enabled": true }
+}

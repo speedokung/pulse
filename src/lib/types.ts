@@ -1,11 +1,14 @@
 export type Category = "sport" | "music" | "games" | "outdoor" | "make";
 export type Visibility = "all" | "accepted";
 export type MemberStatus = "requested" | "accepted";
+export type Level = "any" | "beginner" | "casual" | "serious";
+export type Verified = "google" | "line" | null;
+export interface Signal { user_id: string; kind: "interested" | "omw"; eta_min: number | null; updated_at: string }
 
 export interface LatLng { lat: number; lng: number }
 
 /** What other people see about someone. */
-export interface PublicProfile { display_name: string; avatar_url?: string | null }
+export interface PublicProfile { display_name: string; avatar_url?: string | null; verified?: Verified }
 
 export interface MyProfile { display_name: string; avatar_url: string | null; interests: Category[] }
 
@@ -34,6 +37,9 @@ export interface Pulse {
   exact?: { lat: number; lng: number; place_name: string } | null;
   /** Host's contact; present only for the host and accepted people. */
   contact?: Contact | null;
+  level?: Level;
+  series_id?: string | null;
+  pulse_signals?: Signal[];
 }
 
 export interface Contact { line_id: string | null; phone: string | null; landmark: string | null }
@@ -65,4 +71,6 @@ export interface NewPulse {
   place: string;
   area: string;
   contact: Contact;
+  level: Level;
+  repeatWeeks: number;
 }

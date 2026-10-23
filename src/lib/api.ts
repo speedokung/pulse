@@ -1,11 +1,11 @@
 // One data layer for both modes: Supabase when configured, the in-memory demo otherwise.
-import type { ChatMessage, Contact, FeedPost, LatLng, MemberStatus, NewPulse, PostKind, Pulse } from "./types";
+import type { Category, ChatMessage, Contact, FeedPost, LatLng, MemberStatus, NewPulse, PostKind, Pulse, Signal } from "./types";
 import { configured, supabase, PHOTO_BUCKET } from "./supabase";
 import * as demo from "./demo";
 import { getLang } from "./i18n";
 import { DAY, MIN } from "./pulse";
 
-const PULSE_SELECT = "*, host:profiles!pulses_host_id_fkey(display_name,avatar_url), memberships(user_id,status,profile:profiles(display_name,avatar_url))";
+const PULSE_SELECT = "*, host:profiles!pulses_host_id_fkey(display_name,avatar_url,verified), memberships(user_id,status,profile:profiles(display_name,avatar_url)), pulse_signals(user_id,kind,eta_min,updated_at)";
 
 function bbox(c: LatLng, km: number) {
   const dLat = km / 111, dLng = km / (111 * Math.cos((c.lat * Math.PI) / 180));
@@ -79,6 +79,7 @@ export async function createPulse(np: NewPulse): Promise<string> {
     p_category: np.category, p_title: np.title, p_need: np.need,
     p_starts_at: new Date(Date.now() + np.startInMin * MIN).toISOString(), p_duration_min: np.durationMin,
     p_visibility: np.visibility, p_lat: np.lat, p_lng: np.lng, p_place: np.place, p_area: np.area,
+    p_level: np.level, p_repeat_weeks: np.repeatWeeks,
   });
   if (error) throw error;
   const id = data as string;
@@ -111,6 +112,69 @@ export function subscribeChat(pulseId: string, fn: () => void): () => void {
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "pulse_messages", filter: `pulse_id=eq.${pulseId}` }, fn)
     .subscribe();
   return () => { supabase.removeChannel(ch); };
+}
+
+// ---------- interested / on my way ----------
+export async function setSignal(uid: string, pulseId: string, kind: Signal["kind"] | null, etaMin: number | null = null) {
+  if (!configured) return demo.demoSignal(pulseId, kind, etaMin);
+  if (!kind) {
+    const { error } = await supabase.from("pulse_signals").delete().eq("pulse_id", pulseId).eq("user_id", uid);
+    if (error) throw error; return;
+  }
+  const { error } = await supabase.from("pulse_signals").upsert({ pulse_id: pulseId, user_id: uid, kind, eta_min: etaMin, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+
+// ---------- trust ----------
+/** How many meetups each host has run (ended, with at least one other person). */
+export async function hostStats(ids: string[]): Promise<Record<string, number>> {
+  if (!ids.length) return {};
+  if (!configured) return demo.demoHostStats(ids);
+  const { data, error } = await supabase.rpc("host_stats", { p_ids: ids });
+  if (error) return {};
+  return Object.fromEntries(((data ?? []) as { host_id: string; hosted: number }[]).map((r) => [r.host_id, r.hosted]));
+}
+export async function syncVerified() {
+  if (!configured) return null;
+  const { data } = await supabase.rpc("sync_verified");
+  return (data as string | null) ?? null;
+}
+
+// ---------- LINE ----------
+export async function startLineLink(): Promise<string> {
+  const { data, error } = await supabase.rpc("start_line_link");
+  if (error) throw error;
+  return data as string;
+}
+export async function finishLineLink(code: string, idToken: string): Promise<{ ok: boolean; name?: string | null; error?: string }> {
+  const r = await fetch("/api/line/link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, idToken }) });
+  return r.json();
+}
+export async function myLineLink(uid: string): Promise<{ line_name: string | null } | null> {
+  if (!configured) return null;
+  const { data } = await supabase.from("line_links").select("line_name").eq("user_id", uid).maybeSingle();
+  return (data as { line_name: string | null } | null) ?? null;
+}
+
+export interface NotifyPrefs { enabled: boolean; categories: Category[]; lat: number; lng: number; radius_m: number }
+export async function loadNotifyPrefs(uid: string): Promise<NotifyPrefs | null> {
+  if (!configured) return null;
+  const { data } = await supabase.from("notify_prefs").select("enabled,categories,lat,lng,radius_m").eq("user_id", uid).maybeSingle();
+  return (data as NotifyPrefs | null) ?? null;
+}
+export async function saveNotifyPrefs(uid: string, p: NotifyPrefs) {
+  if (!configured) return;
+  const { error } = await supabase.from("notify_prefs").upsert({ user_id: uid, ...p, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+
+// ---------- Google Maps short links (resolved by our Cloudflare Worker) ----------
+export async function resolveMapLink(url: string): Promise<{ lat?: number; lng?: number; name?: string | null } | null> {
+  try {
+    const r = await fetch(`/api/resolve-map?url=${encodeURIComponent(url)}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
 }
 
 export async function joinPulse(id: string): Promise<MemberStatus> {
@@ -180,6 +244,7 @@ export function subscribe(fn: () => void): () => void {
     .on("postgres_changes", { event: "*", schema: "public", table: "pulses" }, fn)
     .on("postgres_changes", { event: "*", schema: "public", table: "memberships" }, fn)
     .on("postgres_changes", { event: "*", schema: "public", table: "feed_posts" }, fn)
+    .on("postgres_changes", { event: "*", schema: "public", table: "pulse_signals" }, fn)
     .subscribe();
   return () => { supabase.removeChannel(ch); };
 }

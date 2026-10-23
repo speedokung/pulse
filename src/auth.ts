@@ -6,7 +6,7 @@ import type { User } from "@supabase/supabase-js";
 import type { Category, MyProfile } from "./lib/types";
 import { configured, supabase } from "./lib/supabase";
 import { DEMO_UID } from "./lib/demo";
-import { errText } from "./lib/api";
+import { errText, syncVerified } from "./lib/api";
 import { t } from "./lib/i18n";
 
 const SWITCH_FLAG = "pulse.googleSwitch";
@@ -54,6 +54,7 @@ export function useAuth(): Auth {
       }
     }
     setProfile(prof ? { display_name: prof.display_name, avatar_url: prof.avatar_url ?? null, interests: prof.interests ?? [] } : null);
+    if (hasGoogle(u)) syncVerified().catch(() => {}); // the "verified" badge on their Pulses
   }, []);
 
   useEffect(() => {

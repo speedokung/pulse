@@ -1,4 +1,5 @@
-import type { Contact, FeedPost, Pulse } from "../lib/types";
+import type { Contact, FeedPost, Level, Pulse, Signal } from "../lib/types";
+import { hostedCount } from "../lib/trust";
 import { CATS, catIcon } from "../lib/categories";
 import { t } from "../lib/i18n";
 import { accepted, hostName, isHost, isOver, myStatus, openSpots, placeLabel, showsExact, status } from "../lib/pulse";
@@ -17,6 +18,7 @@ export interface Actions {
   post: (p: Pulse, kind: FeedPost["kind"], body: string | null, file: File | null) => Promise<boolean>;
   chat: (p: Pulse, body: string) => Promise<boolean>;
   saveContact: (p: Pulse, c: Contact) => Promise<boolean>;
+  signal: (p: Pulse, kind: Signal["kind"] | null, etaMin?: number | null) => void;
 }
 
 export const Lock = () => (
@@ -81,4 +83,48 @@ export function Avatar({ name, url, size = 22 }: { name?: string | null; url?: s
   return url
     ? <img className="avatar" src={url} alt="" width={size} height={size} referrerPolicy="no-referrer" />
     : <span className="avatar" style={{ width: size, height: size, background: `hsl(${hue} 45% 45%)`, fontSize: size * 0.45 }} aria-hidden="true">{[...n][0]?.toUpperCase()}</span>;
+}
+
+const LEVEL_KEY = { any: "lvAny", beginner: "lvBeginner", casual: "lvCasual", serious: "lvSerious" } as const;
+export const levelLabel = (l: Level) => t(LEVEL_KEY[l]);
+/** Skill level + weekly tags shown on cards and in the detail. */
+export function Tags({ p }: { p: Pulse }) {
+  const lv = p.level && p.level !== "any" ? p.level : null;
+  if (!lv && !p.series_id) return null;
+  return (
+    <span className="tags">
+      {lv && <span className={`tagchip lv-${lv}`}>{levelLabel(lv)}</span>}
+      {p.series_id && <span className="tagchip">↻ {t("weekly")}</span>}
+    </span>
+  );
+}
+
+const Check = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.4 2.1 3.2-.3.8 3.1 2.8 1.6-1.2 3 1.2 3-2.8 1.6-.8 3.1-3.2-.3L12 22l-2.4-2.1-3.2.3-.8-3.1-2.8-1.6 1.2-3-1.2-3 2.8-1.6.8-3.1 3.2.3z" fill="currentColor" /><path d="M8 12.5l2.6 2.5L16 9.5" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
+/** "by Mai ✓ · hosted 23" */
+export function HostLine({ p, uid }: { p: Pulse; uid: string | null }) {
+  const n = hostedCount(p.host_id), v = p.host?.verified;
+  return (
+    <span className="hostline">
+      {by(p, uid)}
+      {v && !isHost(p, uid) && <span className="verified" title={v === "google" ? t("vGoogle") : t("vLine")} aria-label={v === "google" ? t("vGoogle") : t("vLine")}><Check /></span>}
+      {!isHost(p, uid) && <span className="hosted">· {n > 0 ? t("hosted", { n }) : t("newHost")}</span>}
+    </span>
+  );
+}
+
+export const signalsOf = (p: Pulse) => p.pulse_signals ?? [];
+export const mySignal = (p: Pulse, uid: string | null) => signalsOf(p).find((s) => s.user_id === uid) ?? null;
+/** "2 on the way · 3 interested" */
+export function SignalSummary({ p }: { p: Pulse }) {
+  const s = signalsOf(p);
+  const omw = s.filter((x) => x.kind === "omw").length, int = s.filter((x) => x.kind === "interested").length;
+  if (!omw && !int) return null;
+  return (
+    <span className="signals">
+      {omw > 0 && <span className="omw">{t("sComing", { n: omw })}</span>}
+      {int > 0 && <span>{t("sInterestedN", { n: int })}</span>}
+    </span>
+  );
 }
