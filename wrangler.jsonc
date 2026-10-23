@@ -1,6 +1,4 @@
 {
-  // Cloudflare Worker: serves the app from ./dist and runs worker/index.ts for /api/* and shared links.
-  // Keep "name" the same as your Worker in the Cloudflare dashboard.
   "name": "pulse",
   "main": "worker/index.ts",
   "compatibility_date": "2025-09-01",
@@ -10,5 +8,16 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*", "/"]
   },
+  // Public settings the Worker reads at runtime (all of these are safe to be public).
+  // Secrets (SUPABASE_SERVICE_ROLE_KEY, LINE_MESSAGING_TOKEN, WEBHOOK_SECRET) are NOT here:
+  // add them in Cloudflare → Worker → Settings → Variables and Secrets (the top section, not Builds).
+  "vars": {
+    "APP_URL": "https://pulse.speedokung.workers.dev",
+    "SUPABASE_URL": "https://hyoclbxplmetxknvdbvq.supabase.co",
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5b2NsYnhwbG1ldHhrbnZkYnZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI2NTIzMTgsImV4cCI6MjEwODIyODMxOH0.mFEKDQ-HOFsaFeViJmvBwWtdc7pYCxelSEFzDbWn_3A",
+    "LINE_LOGIN_CHANNEL_ID": "2012181363",
+    "LIFF_ID": "2012181363-DmkpiLHR"
+  },
+  "keep_vars": true,
   "observability": { "enabled": true }
 }
