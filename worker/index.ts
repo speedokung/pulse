@@ -48,20 +48,38 @@ export default {
 /* ---------------- Google Maps short links ---------------- */
 
 const MAP_HOSTS = /^(maps\.app\.goo\.gl|goo\.gl|g\.co|maps\.google\.[a-z.]+|(www\.)?google\.[a-z.]+)$/i;
+// Only these hosts are followed. A full google.com/maps address already holds what we need, and
+// fetching it from Cloudflare gets Google's bot check ("/sorry") instead of the page.
+const SHORT_HOSTS = /^(maps\.app\.goo\.gl|goo\.gl|g\.co)$/i;
 
 const safeDecode = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
+/** Google's bot check wraps the real address in ?continue=… */
+function unwrap(u: string): string {
+  try {
+    const x = new URL(u);
+    if (/\/sorry\//.test(x.pathname) && x.searchParams.get("continue")) return x.searchParams.get("continue")!;
+  } catch { /* keep */ }
+  return u;
+}
 function coordsFrom(s: string): { lat: number; lng: number } | null {
   const t = safeDecode(s);
   const m = t.match(/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/)
     || t.match(/\/maps\/(?:search|place|dir\/[^/]*)\/(-?\d{1,2}\.\d+),\s*\+?(-?\d{1,3}\.\d+)/)
-    || t.match(/[?&](?:q|query|ll|destination|center)=(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/)
-    || t.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/)
-;
-  return m ? { lat: +m[1], lng: +m[2] } : null;
+    || t.match(/[?&](?:q|query|ll|destination|center|daddr)=(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/)
+    || t.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (!m) return null;
+  const lat = +m[1], lng = +m[2];
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
 }
+const plusDecode = (s: string) => safeDecode(s.replace(/\+/g, " ")).trim();
 function nameFrom(s: string): string | null {
-  const t = safeDecode(s.replace(/\+/g, " "));
-  return t.match(/\/place\/([^/@?]+)/)?.[1]?.trim() || new URL(s).searchParams.get("q")?.replace(/^-?\d+\.\d+,\s*-?\d+\.\d+$/, "") || null;
+  let u: URL; try { u = new URL(s); } catch { return null; }
+  if (!/google\./i.test(u.hostname) || !u.pathname.startsWith("/maps")) return null;
+  const seg = u.pathname.match(/\/(?:place|search)\/([^/@]+)/)?.[1];
+  let n = seg ? plusDecode(seg) : (u.searchParams.get("q") || u.searchParams.get("query") || "").trim();
+  if (!n || /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(n)) return null;
+  // first part is the place; the rest is the address ("Lumphini Park, Pathum Wan, Bangkok 10330")
+  return n.length > 40 && n.includes(",") ? n.split(",")[0].trim() : n;
 }
 
 async function resolveMap(url: URL): Promise<Response> {
@@ -70,19 +88,22 @@ async function resolveMap(url: URL): Promise<Response> {
   try { target = new URL(raw); } catch { return json({ error: "bad url" }, 400); }
   if (!MAP_HOSTS.test(target.hostname)) return json({ error: "not a Google Maps link" }, 400);
 
-  // follow redirects ourselves (browsers can't, because of CORS)
+  // follow short-link redirects ourselves (browsers can't, because of CORS), stopping at the full address
   let current = target.toString();
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 6; i++) {
+    const host = new URL(current).hostname;
+    if (!SHORT_HOSTS.test(host)) break;
     const r = await fetch(current, { redirect: "manual", headers: { "user-agent": "Mozilla/5.0 (thaew link preview)" } });
     const loc = r.headers.get("location");
-    if (r.status >= 300 && r.status < 400 && loc) { current = new URL(loc, current).toString(); continue; }
+    if (r.status >= 300 && r.status < 400 && loc) { current = unwrap(new URL(loc, current).toString()); continue; }
     break;
   }
-  // Only trust coordinates written in the final address. (The page itself carries a default
-  // map centre that isn't the place.) Without coordinates the app searches the place name instead.
+  current = unwrap(current);
+  // Only trust coordinates written in the address. Without them the app searches the place name instead.
   const ll = coordsFrom(current);
   const name = nameFrom(current);
-  return json({ url: current, ...(ll ?? {}), name }, 200, { "cache-control": "public, max-age=86400" });
+  const ok = ll || name;
+  return json({ url: current, ...(ll ?? {}), name }, 200, { "cache-control": ok ? "public, max-age=86400" : "no-store" });
 }
 
 /* ---------------- Supabase helpers (server side) ---------------- */
