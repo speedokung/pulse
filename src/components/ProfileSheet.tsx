@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { inAppBrowser, renderGoogleButton } from "../lib/google";
+import { getLang } from "../lib/i18n";
+import { prefersDark } from "../lib/mapStyle";
 import type { LatLng } from "../lib/types";
 import { loadNotifyPrefs, myLineLink, saveNotifyPrefs, startLineLink } from "../lib/api";
 import { completeLineLink, inLineApp, lineConfigured, openLineToLink } from "../lib/line";
@@ -31,6 +34,20 @@ export function ProfileSheet({ auth, me, reason, onClose, toast }: { auth: Auth;
     try { setBusy(true); await auth.signInWithGoogle(); }
     catch (e) { setBusy(false); toast((e as Error).message || t("pfGoogleFail")); }
   };
+  // Google's own button (popup) when it loads; the redirect button otherwise (LINE's browser, script blocked)
+  const gBox = useRef<HTMLDivElement>(null);
+  const [gsi, setGsi] = useState<"loading" | "ok" | "fallback">(configured && auth.isGuest && !inAppBrowser() ? "loading" : "fallback");
+  useEffect(() => {
+    if (gsi !== "loading" || !gBox.current) return;
+    let dead = false;
+    renderGoogleButton(gBox.current, getLang(), prefersDark(), async (token, nonce) => {
+      try { setBusy(true); await auth.signInWithGoogleToken(token, nonce); onClose(); }
+      catch (e) { toast((e as Error).message || t("pfGoogleFail")); }
+      finally { setBusy(false); }
+    }).then((ok) => { if (!dead) setGsi(ok ? "ok" : "fallback"); });
+    return () => { dead = true; };
+  }, [gsi]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -53,7 +70,8 @@ export function ProfileSheet({ auth, me, reason, onClose, toast }: { auth: Auth;
 
         {auth.isGuest && (
           <div className="pf-google">
-            <button type="button" className="gbtn" onClick={google} disabled={busy || !configured}><G />{t("pfContinueG")}</button>
+            {gsi !== "fallback" && <div ref={gBox} className="gsi" aria-busy={gsi === "loading" || busy} />}
+            {gsi === "fallback" && <button type="button" className="gbtn" onClick={google} disabled={busy || !configured}><G />{t("pfContinueG")}</button>}
             <div className="sub">{configured
               ? t("pfGoogleWhy")
               : t("pfGoogleOff")}</div>

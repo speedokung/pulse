@@ -12,6 +12,21 @@ import { dayClock, dist, span } from "../lib/format";
 
 export interface DropPrefill { title?: string; category?: Category; need?: number; place?: string; where?: string; sub?: string | null }
 
+/** Unfinished form, kept on this device so closing the sheet (or the app) loses nothing. */
+const DRAFT_KEY = "pulse.draft";
+export interface Draft {
+  at: number; pin: LatLng; title: string; place: string; category: Category; sub: string | null; need: number;
+  vis: Visibility; level: Level; repeat: number; landmark: string;
+  startPreset: number | "custom"; customStart: string; durPreset: number | "until"; until: string;
+}
+export function readDraft(): Draft | null {
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null") as Draft | null;
+    return d && Date.now() - d.at < 24 * 3_600_000 && d.title !== undefined ? d : null;
+  } catch { return null; }
+}
+export function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } }
+
 const LEVELS: Level[] = ["any", "beginner", "casual", "serious"];
 const REPEATS: [Key, number][] = [["rpOnce", 1], ["rp4", 4], ["rp8", 8]];
 
@@ -28,26 +43,32 @@ const roundUp15 = (t: number) => Math.ceil(t / (15 * MIN)) * 15 * MIN;
  * Stays mounted while the person taps the map to move the pin (App hides it),
  * so nothing typed here is lost.
  */
-export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel, onSubmit }: {
+export function DropPulse({ pin, me, prefill, hidden, collapsed, onCollapse, onMovePin, onPin, onCancel, onClose, onSubmit }: {
   pin: LatLng; me: LatLng; prefill: DropPrefill | null; hidden: boolean;
-  onMovePin: () => void; onPin: (ll: LatLng) => void; onCancel: () => void; onSubmit: (np: NewPulse) => Promise<boolean>;
+  /** slid down to show the map; tapping the map then moves the pin */
+  collapsed: boolean; onCollapse: (c: boolean) => void;
+  onMovePin: () => void; onPin: (ll: LatLng) => void;
+  /** discard the form */ onCancel: () => void;
+  /** close but keep the draft */ onClose: () => void;
+  onSubmit: (np: NewPulse) => Promise<boolean>;
 }) {
-  const [title, setTitle] = useState(prefill?.title ?? "");
-  const [place, setPlace] = useState(prefill?.place ?? "");
-  const [category, setCategory] = useState<Category>(prefill?.category ?? "sport");
-  const [need, setNeed] = useState(prefill?.need ?? 2);
-  const [vis, setVis] = useState<Visibility>("all");
-  const [level, setLevel] = useState<Level>("any");
-  const [sub, setSub] = useState<string | null>(prefill?.sub ?? null);
-  const [repeat, setRepeat] = useState(1);
+  const draft = useMemo(() => (prefill ? null : readDraft()), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [title, setTitle] = useState(prefill?.title ?? draft?.title ?? "");
+  const [place, setPlace] = useState(prefill?.place ?? draft?.place ?? "");
+  const [category, setCategory] = useState<Category>(prefill?.category ?? draft?.category ?? "sport");
+  const [need, setNeed] = useState(prefill?.need ?? draft?.need ?? 2);
+  const [vis, setVis] = useState<Visibility>(draft?.vis ?? "all");
+  const [level, setLevel] = useState<Level>(draft?.level ?? "any");
+  const [sub, setSub] = useState<string | null>(prefill?.sub ?? draft?.sub ?? null);
+  const [repeat, setRepeat] = useState(draft?.repeat ?? 1);
   // contact is remembered on this device for next time
   const [lineId, setLineId] = useState(() => { try { return localStorage.getItem("pulse.lineId") || ""; } catch { return ""; } });
   const [phone, setPhone] = useState(() => { try { return localStorage.getItem("pulse.phone") || ""; } catch { return ""; } });
-  const [landmark, setLandmark] = useState("");
+  const [landmark, setLandmark] = useState(draft?.landmark ?? "");
   const [area, setArea] = useState("…");
   const [busy, setBusy] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { titleRef.current?.focus(); }, []);
+  useEffect(() => { if (!draft) titleRef.current?.focus(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { let dead = false; setArea("…"); areaName(pin).then((a) => { if (!dead) setArea(a); }); return () => { dead = true; }; }, [pin.lat, pin.lng]);
 
   // ---------- where ----------
@@ -107,10 +128,10 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
   const choose = (h: PlaceHit) => { onPin(h.ll); setAutoPlace(h.name, h.ll); setQ(""); setHits([]); setWhereMsg(t("fPinned", { p: h.name })); };
 
   // ---------- when ----------
-  const [startPreset, setStartPreset] = useState<number | "custom">(0);
-  const [customStart, setCustomStart] = useState(() => toLocalInput(new Date(roundUp15(Date.now() + 60 * MIN))));
-  const [durPreset, setDurPreset] = useState<number | "until">(60);
-  const [until, setUntil] = useState("");
+  const [startPreset, setStartPreset] = useState<number | "custom">(draft?.startPreset ?? 0);
+  const [customStart, setCustomStart] = useState(() => draft?.customStart || toLocalInput(new Date(roundUp15(Date.now() + 60 * MIN))));
+  const [durPreset, setDurPreset] = useState<number | "until">(draft?.durPreset ?? 60);
+  const [until, setUntil] = useState(draft?.until ?? "");
   // a sub-type fills in a suggested title, people and length, unless the person already typed their own title
   const autoTitle = useRef<string>("");
   const pickSub = (sb: Sub) => {
@@ -137,6 +158,34 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
     : startAt > Date.now() + MAX_AHEAD_DAYS * 86_400_000 ? t("fErrFar", { n: MAX_AHEAD_DAYS })
     : durMin < 15 ? t("fErrShort") : durMin > MAX_DUR ? t("fErrLong") : null;
 
+  // autosave (only once something was actually filled in)
+  useEffect(() => {
+    if (!title.trim() && !place.trim() && !landmark.trim() && !sub) return;
+    const t = setTimeout(() => {
+      const d: Draft = { at: Date.now(), pin, title, place, category, sub, need, vis, level, repeat, landmark, startPreset, customStart, durPreset, until };
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* full or private mode */ }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [pin.lat, pin.lng, title, place, category, sub, need, vis, level, repeat, landmark, startPreset, customStart, durPreset, until]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // slide the sheet down (drag the handle, or tap it) to check the pin on the map
+  const drag = useRef<{ y: number; dy: number } | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const onDown = (e: React.PointerEvent) => { drag.current = { y: e.clientY, dy: 0 }; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); };
+  const onMoveDrag = (e: React.PointerEvent) => {
+    if (!drag.current || !formRef.current) return;
+    drag.current.dy = e.clientY - drag.current.y;
+    const dy = collapsed ? Math.min(0, drag.current.dy) : Math.max(0, drag.current.dy);
+    formRef.current.style.transform = dy ? `translateY(${dy}px)` : "";
+  };
+  const onUp = () => {
+    const dy = drag.current?.dy ?? 0; drag.current = null;
+    if (formRef.current) formRef.current.style.transform = "";
+    if (!collapsed && dy > 50) onCollapse(true);
+    else if (collapsed && dy < -30) onCollapse(false);
+    else if (Math.abs(dy) < 6) onCollapse(!collapsed); // a tap toggles
+  };
+
   const d = distanceM(me, pin);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,7 +200,7 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
       contact: { line_id: lineId.trim().replace(/^@?/, "") || null, phone: phone.trim() || null, landmark: landmark.trim() || null },
     });
     setBusy(false);
-    if (!ok) titleRef.current?.focus();
+    if (ok) clearDraft(); else titleRef.current?.focus();
   };
 
   const moreSummary = [
@@ -162,10 +211,22 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
   ].filter(Boolean).join(" · ");
 
   return (
-    <form className="sheet drop" onSubmit={submit} hidden={hidden}>
+    <form ref={formRef} className={`sheet drop${collapsed ? " collapsed" : ""}`} onSubmit={submit} hidden={hidden}>
+      <div className="grab" onPointerDown={onDown} onPointerMove={onMoveDrag} onPointerUp={onUp} onPointerCancel={onUp}
+        role="button" tabIndex={0} aria-expanded={!collapsed} aria-label={collapsed ? t("dExpand") : t("dCollapse")}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onCollapse(!collapsed); } }}>
+        <span className="handle" />
+      </div>
+      {collapsed ? (
+        <div className="peek">
+          <div><b>{title.trim() || (prefill ? t("dropAgain") : t("dropTitle"))}</b>
+            <span>{t("dPeekHint")} · {d < 40 ? t("fAtYou") : t("fFromYou", { d: dist(d) })}</span></div>
+          <button type="button" className="go" onClick={() => onCollapse(false)}>{t("dContinue")}</button>
+        </div>
+      ) : (<>
       <div className="drop-h">
-        <h2>{prefill ? t("dropAgain") : t("dropTitle")}</h2>
-        <button type="button" className="xbtn" onClick={onCancel} aria-label={t("close")}>×</button>
+        <h2>{prefill ? t("dropAgain") : t("dropTitle")}{draft && <span className="draftnote">{t("dDraft")}</span>}</h2>
+        <button type="button" className="xbtn" onClick={onClose} aria-label={t("close")}>×</button>
       </div>
 
       <section className="dsec">
@@ -214,7 +275,7 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
         {whereMsg && <div className="where" role="status">{whereMsg}</div>}
         <div className="pair">
           <button type="button" className="mini" onClick={() => { onPin(me); setWhereMsg(t("fPinnedAtYou")); }}>{t("fAtMe")}</button>
-          <button type="button" className="mini" onClick={onMovePin}>{t("fPickMap")}</button>
+          <button type="button" className="mini" onClick={() => onCollapse(true)}>{t("fPickMap")}</button>
         </div>
         <input type="text" id="f-place" maxLength={60} value={place} onChange={(e) => setPlace(e.target.value)} placeholder={t("fSpotPh")} aria-label={t("fSpotName")} />
         <div className="where">{d < 40 ? t("fAtYou") : t("fFromYou", { d: dist(d) })} · {t("around", { a: area })}</div>
@@ -269,9 +330,10 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
       </details>
 
       <div className="btns sticky">
-        <button type="button" className="ghostbtn" onClick={onCancel}>{t("cancel")}</button>
+        <button type="button" className="ghostbtn" onClick={() => { clearDraft(); onCancel(); }}>{t("dDiscard")}</button>
         <button type="submit" className="go" disabled={busy || !!timeError}>{busy ? t("posting") : startPreset === 0 ? t("fGoLive") : t("fPost")}</button>
       </div>
+      </>)}
     </form>
   );
 }

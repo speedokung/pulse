@@ -20,6 +20,8 @@ export interface Auth {
   error: string | null;
   notice: string | null;
   signInWithGoogle: () => Promise<void>;
+  /** Popup flow: a Google ID token from Google's own button. */
+  signInWithGoogleToken: (token: string, nonce: string) => Promise<void>;
   signOut: () => Promise<void>;
   saveProfile: (p: { display_name: string; interests: Category[] }) => Promise<void>;
 }
@@ -112,6 +114,27 @@ export function useAuth(): Auth {
     if (error) throw error;
   }, []);
 
+  const signInWithGoogleToken = useCallback(async (token: string, nonce: string) => {
+    if (!configured) throw new Error(t("pfGoogleOff"));
+    const { data: { user: u } } = await supabase.auth.getUser();
+    if (u?.is_anonymous) {
+      // keep everything the guest already did
+      const { error } = await supabase.auth.linkIdentity({ provider: "google", token, nonce });
+      if (!error) {
+        const { data } = await supabase.auth.refreshSession();
+        if (data.user) { applied.current = ""; await apply(data.user); }
+        setNotice(t("tGoogleOk"));
+        return;
+      }
+      // this Google account already has a แถว profile (e.g. from another phone): switch to it with the same token
+      if (!/already|exists|linked|manual linking/i.test(error.message)) throw error;
+    }
+    const { data, error } = await supabase.auth.signInWithIdToken({ provider: "google", token, nonce });
+    if (error) throw error;
+    if (data.user) { applied.current = ""; await apply(data.user); }
+    setNotice(t("tGoogleOk"));
+  }, [apply]);
+
   const signOut = useCallback(async () => {
     if (!configured) return;
     await supabase.auth.signOut();
@@ -134,6 +157,6 @@ export function useAuth(): Auth {
     uid: configured ? user?.id ?? null : DEMO_UID,
     isGuest: configured ? !user || !hasGoogle(user) : true,
     email: user && hasGoogle(user) ? user.email ?? null : null,
-    profile, error, notice, signInWithGoogle, signOut, saveProfile,
+    profile, error, notice, signInWithGoogle, signInWithGoogleToken, signOut, saveProfile,
   };
 }

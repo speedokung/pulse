@@ -16,6 +16,14 @@ export function setLang(l: Lang) {
 document.documentElement.lang = LANG;
 
 const S = {
+  dExpand: { th: "เปิดฟอร์มตั้งก๊วน", en: "Open the form" },
+  dCollapse: { th: "เลื่อนลงเพื่อดูแผนที่", en: "Slide down to see the map" },
+  dPeekHint: { th: "แตะแผนที่เพื่อย้ายหมุด", en: "Tap the map to move the pin" },
+  dContinue: { th: "กรอกต่อ", en: "Continue" },
+  dDraft: { th: "ร่างที่บันทึกไว้", en: "saved draft" },
+  dDiscard: { th: "ทิ้งร่าง", en: "Discard" },
+  dKept: { th: "เก็บร่างไว้แล้ว กดตั้งก๊วนเพื่อทำต่อ", en: "Draft saved. Tap Start to continue." },
+  fabDraft: { th: "ทำต่อ", en: "Continue" },
   // simplified form + sub-types + GPS button
   fSubHint: { th: "เลือกย่อยได้ (ไม่บังคับ) จะช่วยเติมให้", en: "Pick one to fill the form (optional)" },
   fNeedShort: { th: "ขาดอีก", en: "Need" },

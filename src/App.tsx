@@ -18,7 +18,7 @@ import { FeedTab } from "./components/FeedTab";
 import { HistoryTab, Period, PERIODS } from "./components/HistoryTab";
 import { GrowTab } from "./components/GrowTab";
 import { ShareModal } from "./components/ShareModal";
-import { DropPrefill, DropPulse } from "./components/DropPulse";
+import { DropPrefill, DropPulse, readDraft } from "./components/DropPulse";
 import { ProfileSheet } from "./components/ProfileSheet";
 import { Avatar, type Actions } from "./components/ui";
 
@@ -49,6 +49,7 @@ export default function App() {
   const [sel, setSel] = useState<string | null>(null);
   const [placing, setPlacing] = useState<null | "pin" | "me">(null);
   const [drop, setDrop] = useState<{ pin: LatLng; prefill: DropPrefill | null; k: number } | null>(null);
+  const [dropDown, setDropDown] = useState(false); // form slid down to look at the map
   const [share, setShare] = useState<Pulse | "poster" | null>(null);
   const [lang, setLangState] = useState<Lang>(getLang);
   const [profileOpen, setProfileOpen] = useState<null | { reason: string | null }>(null);
@@ -219,15 +220,22 @@ export default function App() {
     else toast(r.denied ? t("locDenied") : t("locFail"));
   };
 
-  const openDrop = () => { if (needName(t("whyHost"))) return; setSel(null); setDrop({ pin: loc.me, prefill: null, k: Date.now() }); if (window.innerWidth < 820) setTab("map"); };
+  const openDrop = () => {
+    if (needName(t("whyHost"))) return;
+    const d = readDraft();
+    setSel(null); setDropDown(false); setDrop({ pin: d?.pin ?? loc.me, prefill: null, k: Date.now() });
+    if (d) setCenterOn({ ll: d.pin, k: Date.now() });
+    if (window.innerWidth < 820) setTab("map");
+  };
+  const collapseDrop = (c: boolean) => { setDropDown(c); if (c && drop) setCenterOn({ ll: drop.pin, k: Date.now() }); };
   const onPick = (ll: LatLng) => {
     if (placing === "me") { loc.setManual(ll); setPlacing(null); toast(t("spotSet")); return; }
-    if (drop) { setDrop({ ...drop, pin: ll }); setPlacing(null); }
+    if (drop) { setDrop({ ...drop, pin: ll }); setPlacing(null); } // the sheet stays slid down so they can keep adjusting
   };
   const submitDrop = async (np: Parameters<typeof createPulse>[0]) => {
     try {
       const id = await createPulse(np);
-      setDrop(null); toast(np.startInMin <= 1 ? t("tLiveNow") : t("tScheduled")); await data.reload(); setSel(id);
+      setDrop(null); setDropDown(false); toast(np.startInMin <= 1 ? t("tLiveNow") : t("tScheduled")); await data.reload(); setSel(id);
       return true;
     } catch (e) { toast(errText(e)); return false; }
   };
@@ -242,7 +250,7 @@ export default function App() {
     <div className={`app tab-${tab}`}>
       <div className="mapwrap">
         <MapView me={loc.me} items={mapItems} uid={uid} selectedId={sel} surfaced={surfaced} radiusM={radiusM}
-          placing={!!placing} pin={drop && !placing ? drop.pin : placing === "pin" && drop ? drop.pin : null}
+          placing={!!placing || (!!drop && dropDown)} pin={drop ? drop.pin : null}
           centerOn={centerOn} onSelect={select} onPick={onPick} />
         <div className="brand"><span className="dot" /><b>{t("brand")}</b>{!configured && <span className="brand-sub">{t("demo")}</span>}
           <button className="langbtn" onClick={() => setLang(lang === "th" ? "en" : "th")} aria-label={t("language")}>{lang === "th" ? "EN" : "ไทย"}</button></div>
@@ -263,9 +271,12 @@ export default function App() {
         )}
         {placing && <div className="placehint">{placing === "me" ? t("tapWhereYouAre") : t("tapWhereItIs")} <button onClick={() => setPlacing(null)}>{t("cancel")}</button></div>}
         {selected && !drop && <PulseDetail p={selected} uid={uid} me={loc.me} posts={data.posts} a={a} />}
-        {!drop && !placing && <button className="fab" onClick={openDrop}><span className="ring" />{t("fab")}</button>}
+        {!drop && !placing && <button className="fab" onClick={openDrop}><span className="ring" />{readDraft() ? t("fabDraft") : t("fab")}</button>}
         {drop && (
-          <DropPulse key={drop.k} hidden={!!placing} pin={drop.pin} me={loc.me} prefill={drop.prefill} onMovePin={() => setPlacing("pin")} onPin={(ll) => { setDrop((d) => (d ? { ...d, pin: ll } : d)); setCenterOn({ ll, k: Date.now() }); }} onCancel={() => setDrop(null)} onSubmit={submitDrop} />
+          <DropPulse key={drop.k} hidden={!!placing} collapsed={dropDown} onCollapse={collapseDrop} pin={drop.pin} me={loc.me} prefill={drop.prefill}
+            onMovePin={() => collapseDrop(true)} onPin={(ll) => { setDrop((d) => (d ? { ...d, pin: ll } : d)); setCenterOn({ ll, k: Date.now() }); }}
+            onCancel={() => { setDrop(null); setDropDown(false); }}
+            onClose={() => { setDrop(null); setDropDown(false); if (readDraft()) toast(t("dKept")); }} onSubmit={submitDrop} />
         )}
       </div>
 

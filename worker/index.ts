@@ -75,12 +75,34 @@ function coordsFrom(s: string): { lat: number; lng: number } | null {
 const plusDecode = (s: string) => safeDecode(s.replace(/\+/g, " ")).trim();
 function nameFrom(s: string): string | null {
   let u: URL; try { u = new URL(s); } catch { return null; }
-  if (!/google\./i.test(u.hostname) || !u.pathname.startsWith("/maps")) return null;
+  if (!/google\./i.test(u.hostname) || !(u.pathname.startsWith("/maps") || /^maps\./i.test(u.hostname))) return null;
   const seg = u.pathname.match(/\/(?:place|search)\/([^/@]+)/)?.[1];
   let n = seg ? plusDecode(seg) : (u.searchParams.get("q") || u.searchParams.get("query") || "").trim();
   if (!n || /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(n)) return null;
   // first part is the place; the rest is the address ("Lumphini Park, Pathum Wan, Bangkok 10330")
   return n.length > 40 && n.includes(",") ? n.split(",")[0].trim() : n;
+}
+
+/** Google's feature id ("0x30e2…:0x2ea1…"), found in links shared from the phone app, which carry no coordinates. */
+function ftidFrom(s: string): string | null {
+  const t = safeDecode(s);
+  const m = t.match(/!1s(0x[0-9a-f]+:0x[0-9a-f]+)/i) || t.match(/[?&]ftid=(0x[0-9a-f]+:0x[0-9a-f]+)/i);
+  if (m) return m[1].toLowerCase();
+  const cid = t.match(/[?&]cid=(\d{5,20})/)?.[1];
+  return cid ? `0x0:0x${BigInt(cid).toString(16)}` : null;
+}
+/** Asks Google Maps' own place-data endpoint where that feature is. */
+async function coordsForFtid(ftid: string): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const pb = encodeURIComponent(`!1m2!1s${ftid}!3m0`);
+    const r = await fetch(`https://www.google.com/maps/preview/place?hl=th&pb=${pb}`, {
+      headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36", "accept-language": "th,en" },
+      redirect: "manual",
+    });
+    if (!r.ok) return null;
+    const m = (await r.text()).match(/\[null,null,(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)\]/);
+    return m ? { lat: +m[1], lng: +m[2] } : null;
+  } catch { return null; }
 }
 
 async function resolveMap(url: URL): Promise<Response> {
@@ -101,8 +123,9 @@ async function resolveMap(url: URL): Promise<Response> {
   }
   current = unwrap(current);
   // Only trust coordinates written in the address. Without them the app searches the place name instead.
-  const ll = coordsFrom(current);
+  let ll = coordsFrom(current);
   const name = nameFrom(current);
+  if (!ll) { const f = ftidFrom(current); if (f) ll = await coordsForFtid(f); }
   const ok = ll || name;
   return json({ url: current, ...(ll ?? {}), name }, 200, { "cache-control": ok ? "public, max-age=86400" : "no-store" });
 }

@@ -418,3 +418,17 @@ html:lang(th) .pm-label { font-family: var(--f-thai); font-size: 13px; }
 }
 html, body { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .maplibregl-canvas { touch-action: none; }
+.gsi { min-height: 44px; display: flex; justify-content: center; }
+.gsi[aria-busy="true"] { opacity: .7; }
+
+/* drop sheet: drag handle, slid-down peek bar, draft note */
+.sheet.drop { transition: transform .18s ease-out; }
+.grab { display: grid; place-items: center; height: 22px; margin: -10px 0 0; cursor: grab; touch-action: none; }
+.grab .handle { width: 42px; height: 5px; border-radius: 3px; background: var(--line); }
+.sheet.drop.collapsed { max-height: none; overflow: visible; padding-bottom: calc(12px + env(safe-area-inset-bottom) + var(--tabbar)); }
+.peek { display: flex; align-items: center; gap: 12px; padding: 2px 0 2px; }
+.peek > div { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.peek b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.peek span { font-size: 13px; color: var(--muted); }
+.peek .go { flex: none; padding: 11px 18px; }
+.draftnote { font-family: var(--f-body); font-size: 12px; font-weight: 600; color: var(--muted); background: var(--bg); border-radius: 999px; padding: 3px 9px; margin-left: 8px; vertical-align: middle; }
