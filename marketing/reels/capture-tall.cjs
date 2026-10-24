@@ -15,6 +15,7 @@ const fs = require('fs');
   await p.screenshot({ path: `${out}/01-map.png` });
   taps.fab = await box('.fab');
   await p.click('.fab'); await p.waitForTimeout(900);
+  if (process.argv[5] !== undefined) { await p.click(`.cattile >> nth=${process.argv[5]}`); await p.waitForTimeout(500); }   // category tile (0 sport, 1 music, 2 games, 3 outdoor, 4 make)
   await p.$eval('#f-title', (e) => e.blur());
   await p.screenshot({ path: `${out}/02-form.png` });
   taps.sub = await box(`.scrollrow .chip >> nth=${SUB}`);
