@@ -82,7 +82,7 @@
       "stagger": 0.18
     }
   ],
-  "voice": "th-TH-PremwadeeNeural",
+  "voice": "gemini:Laomedeia",
   "vo": [
     [
       0.15,

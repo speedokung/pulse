@@ -82,7 +82,7 @@
       "stagger": 0.18
     }
   ],
-  "voice": "th-TH-NiwatNeural",
+  "voice": "gemini:Puck",
   "vo": [
     [
       0.15,

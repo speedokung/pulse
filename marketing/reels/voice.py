@@ -46,11 +46,17 @@ def gemini_tts(text, voice, style, out_wav):
         req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
                                      data=json.dumps(body).encode(), headers={"content-type": "application/json", "x-goog-api-key": gemini_key()})
         return json.load(urllib.request.urlopen(req, context=ctx, timeout=120))
-    try:
-        j = call({"voice": voice})
-    except urllib.error.HTTPError as e:
-        if e.code != 400: raise
-        j = call({"prebuiltVoiceConfig": {"voiceName": voice}})   # older request shape
+    import time
+    shape = {"voice": voice}
+    for attempt in range(6):
+        try:
+            j = call(shape); break
+        except urllib.error.HTTPError as e:
+            if e.code == 400 and "voice" in shape:
+                shape = {"prebuiltVoiceConfig": {"voiceName": voice}}; continue   # older request shape
+            if e.code in (429, 500, 503) and attempt < 5:
+                time.sleep(15 * (attempt + 1)); continue                              # free-tier rate limit
+            raise
     data = base64.b64decode(j["candidates"][0]["content"]["parts"][0]["inlineData"]["data"])
     if data[:4] != b"RIFF":   # raw PCM -> wav
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "s16le", "-ar", "24000", "-ac", "1", "-i", "-", out_wav], input=data, check=True)
@@ -68,6 +74,43 @@ def trim(src, dst, tempo=1.0):
     edge = "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.04"
     af = f"{edge},areverse,{edge},areverse" + (f",atempo={tempo}" if tempo != 1.0 else "")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-af", af, "-ar", "48000", dst], check=True)
+
+def silences(path, min_d=0.3):
+    """[(start, end)] of quiet stretches in a wav."""
+    log = subprocess.run(["ffmpeg", "-i", path, "-af", f"silencedetect=n=-38dB:d={min_d}", "-f", "null", "-"], capture_output=True, text=True).stderr
+    st = [float(x.split("silence_start: ")[1].split()[0]) for x in log.splitlines() if "silence_start: " in x]
+    en = [float(x.split("silence_end: ")[1].split()[0]) for x in log.splitlines() if "silence_end: " in x]
+    return list(zip(st, en))
+
+def gemini_script(lines, voice, style):
+    """All of a Reel's lines in ONE Gemini request (the free tier allows ~10 requests a day), split back
+    into one trimmed wav per line at the longest pauses. Returns [(path, seconds)] in line order."""
+    name = voice.split(":", 1)[1]
+    texts = [t for _, t, _ in lines]
+    key = hashlib.md5(f"{voice}|{style}|{'||'.join(texts)}".encode()).hexdigest()[:10]
+    raw = os.path.join(HERE, "cache", "vo", key + "-script.wav")
+    if not os.path.exists(raw):
+        gemini_tts(" <long pause> ".join(texts), name, style, raw)
+    total = dur(raw)
+    gaps = [g for g in silences(raw) if g[0] > 0.05 and g[1] < total - 0.05]   # inner pauses only
+    if len(gaps) < len(texts) - 1:
+        os.remove(raw)
+        sys.exit(f"could only find {len(gaps)} pauses for {len(texts)} lines — run again (one more request)")
+    cuts = sorted(sorted(gaps, key=lambda g: g[1] - g[0], reverse=True)[:len(texts) - 1])
+    bounds = [0.0] + [(a + b) / 2 for a, b in cuts] + [total]
+    out = []
+    for i, (t, text, slot) in enumerate(lines):
+        piece = os.path.join(HERE, "cache", "vo", f"{key}-{i}.wav")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(bounds[i]), "-to", str(bounds[i + 1]), "-i", raw, piece], check=True)
+        for tempo in (1.0, 1.08, 1.16, 1.25):   # a line that overruns its scene is sped up slightly
+            fin = os.path.join(HERE, "cache", "vo", f"{key}-{i}-{tempo}.wav")
+            trim(piece, fin, tempo)
+            d = dur(fin)
+            if d <= slot: break
+        else:
+            print(f"  ! '{text}' is {d:.1f}s for a {slot:.1f}s slot", file=sys.stderr)
+        out.append((fin, d))
+    return out
 
 def say(text, voice, slot, style=None):
     os.makedirs(os.path.join(HERE, "cache", "vo"), exist_ok=True)
@@ -111,7 +154,11 @@ def main(name):
     out = os.path.join(HERE, "out", name + "-vo.mp4")
     total = dur(src)
     voice = spec.get("voice", "th-TH-PremwadeeNeural")
-    lines = [(t, *say(text, voice, slot, spec.get("style"))) for t, text, slot in spec.get("vo", [])]
+    vo = spec.get("vo", [])
+    if voice.startswith("gemini:") and vo:
+        lines = [(t, *got) for (t, _, _), got in zip(vo, gemini_script(vo, voice, spec.get("style") or DEFAULT_STYLE))]
+    else:
+        lines = [(t, *say(text, voice, slot, spec.get("style"))) for t, text, slot in vo]
     music = spec.get("music") or {}
 
     args = ["ffmpeg", "-v", "error", "-y", "-i", src]

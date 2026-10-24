@@ -58,7 +58,7 @@
       "stagger": 0.18
     }
   ],
-  "voice": "th-TH-PremwadeeNeural",
+  "voice": "gemini:Leda",
   "vo": [
     [
       0.15,

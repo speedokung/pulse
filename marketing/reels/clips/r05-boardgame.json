@@ -77,7 +77,7 @@
       "stagger": 0.18
     }
   ],
-  "voice": "th-TH-NiwatNeural",
+  "voice": "gemini:Achird",
   "vo": [
     [
       0.1,
