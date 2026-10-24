@@ -110,3 +110,14 @@ export async function fbTick(env: FbEnv, opts: { dryRun?: boolean } = {}): Promi
   }
   return log;
 }
+
+/** Can we reach the Page with publishing rights? Returns public info only. */
+export async function fbCheck(env: FbEnv): Promise<Record<string, unknown>> {
+  try {
+    if (!env.FB_PAGE_ID || !env.FB_PAGE_TOKEN) return { ok: false, error: "FB_PAGE_ID / FB_PAGE_TOKEN missing" };
+    const p = (await fb(env.FB_PAGE_ID, { fields: "name,tasks" }, env.FB_PAGE_TOKEN, "GET").catch(() =>
+      fb(env.FB_PAGE_ID!, { fields: "name" }, env.FB_PAGE_TOKEN!, "GET"))) as { name?: string; tasks?: string[] };
+    const me = (await fb("me", { fields: "id" }, env.FB_PAGE_TOKEN, "GET")) as { id?: string };
+    return { ok: true, page: p.name, is_page_token: me.id === env.FB_PAGE_ID, can_create_content: p.tasks ? p.tasks.includes("CREATE_CONTENT") : "unknown", paused: env.FB_PAUSED === "1" };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}

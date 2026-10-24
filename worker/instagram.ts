@@ -51,7 +51,7 @@ async function ig(path: string, params: Record<string, string>, token: string, m
 }
 
 /** The current token: the stored (refreshed) one, refreshed again when it's a week old. */
-async function token(env: IgEnv, log: string[]): Promise<string | null> {
+export async function token(env: IgEnv, log: string[]): Promise<string | null> {
   const rows = (await db(env, "ig_state?key=eq.token&select=value,updated_at")) as { value: string; updated_at: string }[];
   let tok = rows[0]?.value || env.IG_ACCESS_TOKEN || null;
   const age = rows[0] ? Date.now() - Date.parse(rows[0].updated_at) : Infinity;
@@ -126,4 +126,17 @@ export async function igTick(env: IgEnv, opts: { dryRun?: boolean } = {}): Promi
     log.push(`${next.id}: ${(e as Error).message}`);
   }
   return log;
+}
+
+/** Can we reach the account? Returns public info only. */
+export async function igCheck(env: IgEnv): Promise<Record<string, unknown>> {
+  try {
+    if (!env.IG_USER_ID) return { ok: false, error: "IG_USER_ID missing" };
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return { ok: false, error: "Supabase settings missing" };
+    const tok = await token(env, []);
+    if (!tok) return { ok: false, error: "IG_ACCESS_TOKEN missing" };
+    const me = (await ig("me", { fields: "user_id,username" }, tok, "GET")) as { user_id?: string; username?: string };
+    const rows = (await db(env, "ig_posts?select=id,status&id=not.like.fb:*")) as { status: string }[];
+    return { ok: true, username: me.username, id_matches: String(me.user_id) === env.IG_USER_ID, posted: rows.filter((r) => r.status === "published").length, paused: env.IG_PAUSED === "1" };
+  } catch (e) { return { ok: false, error: (e as Error).message.replace(/access_token=[^&\s]+/g, "access_token=…") }; }
 }

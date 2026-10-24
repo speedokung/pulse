@@ -16,7 +16,9 @@
     "SUPABASE_URL": "https://hyoclbxplmetxknvdbvq.supabase.co",
     "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5b2NsYnhwbG1ldHhrbnZkYnZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI2NTIzMTgsImV4cCI6MjEwODIyODMxOH0.mFEKDQ-HOFsaFeViJmvBwWtdc7pYCxelSEFzDbWn_3A",
     "LINE_LOGIN_CHANNEL_ID": "2012181363",
-    "LIFF_ID": "2012181363-DmkpiLHR"
+    "LIFF_ID": "2012181363-DmkpiLHR",
+    "IG_USER_ID": "17841437629300591",
+    "FB_PAGE_ID": "1457600507439425"
   },
   "keep_vars": true,
   "routes": [

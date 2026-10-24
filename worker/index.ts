@@ -15,7 +15,8 @@
 //   LIFF_ID                                         plain text (optional, makes LINE messages open inside LINE)
 
 import { igTick } from "./instagram";
-import { fbTick } from "./facebook";
+import { fbTick, fbCheck } from "./facebook";
+import { igCheck } from "./instagram";
 
 export interface Env {
   IG_USER_ID?: string;
@@ -57,6 +58,15 @@ export default {
         const dryRun = url.searchParams.get("dry") === "1";
         const run = (f: () => Promise<string[]>) => f().catch((e) => [`error: ${(e as Error).message}`]);
         return json({ log: await run(() => igTick(env, { dryRun })), fb: await run(() => fbTick(env, { dryRun })) });
+      }
+      // is posting set up? (public names only; cached 10 min so it can't be used to burn API calls)
+      if (url.pathname === "/api/social/status") {
+        const cache = caches.default, key = new Request(`${url.origin}/api/social/status`);
+        const hit = await cache.match(key);
+        if (hit && !url.searchParams.has("fresh")) return hit;
+        const res = json({ instagram: await igCheck(env), facebook: await fbCheck(env), checked_at: new Date().toISOString() }, 200, { "cache-control": "public, max-age=600" });
+        ctx.waitUntil(cache.put(key, res.clone()));
+        return res;
       }
       if (url.pathname.startsWith("/api/")) return json({ error: "not found" }, 404);
       if (url.pathname === "/") return await withPreview(req, env, url.searchParams.get("p"));
