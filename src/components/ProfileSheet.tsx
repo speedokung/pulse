@@ -96,6 +96,7 @@ export function ProfileSheet({ auth, me, reason, onClose, toast }: { auth: Auth;
           <button type="button" className="ghostbtn" onClick={onClose}>{reason ? t("pfNotNow") : t("close")}</button>
           <button type="submit" className="go" disabled={busy || !name.trim()}>{reason ? t("pfContinue") : t("pfSave")}</button>
         </div>
+        <div className="legal"><a href="/privacy" target="_blank" rel="noopener">{t("privacy")}</a> · <a href="/terms" target="_blank" rel="noopener">{t("terms")}</a></div>
       </form>
     </div>
   );

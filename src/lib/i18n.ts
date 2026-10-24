@@ -16,6 +16,8 @@ export function setLang(l: Lang) {
 document.documentElement.lang = LANG;
 
 const S = {
+  privacy: { th: "นโยบายความเป็นส่วนตัว", en: "Privacy" },
+  terms: { th: "ข้อตกลงการใช้งาน", en: "Terms" },
   dExpand: { th: "เปิดฟอร์มตั้งก๊วน", en: "Open the form" },
   dCollapse: { th: "เลื่อนลงเพื่อดูแผนที่", en: "Slide down to see the map" },
   dPeekHint: { th: "แตะแผนที่เพื่อย้ายหมุด", en: "Tap the map to move the pin" },
