@@ -432,3 +432,122 @@ create policy "upload into own folder" on storage.objects for insert to authenti
 do $$ begin
   alter publication supabase_realtime add table public.pulses, public.memberships, public.feed_posts;
 exception when duplicate_object then null; end $$;
+
+-- ---------- profiles: bio, public/private, follows ----------
+-- A public profile shows the activities someone hosted and joined to everyone, and anyone can follow it.
+-- A private profile shows them only to accepted followers; following it sends a request.
+alter table public.profiles add column if not exists bio text check (bio is null or char_length(bio) <= 160);
+alter table public.profiles add column if not exists is_public boolean not null default true;
+
+create table if not exists public.follows (
+  follower   uuid not null references public.profiles(id) on delete cascade,
+  followee   uuid not null references public.profiles(id) on delete cascade,
+  status     text not null default 'accepted' check (status in ('requested','accepted')),
+  created_at timestamptz not null default now(),
+  primary key (follower, followee),
+  check (follower <> followee)
+);
+create index if not exists follows_followee on public.follows (followee, status);
+alter table public.follows enable row level security;
+drop policy if exists "follows seen by the two people" on public.follows;
+drop policy if exists "unfollow or remove a follower" on public.follows;
+create policy "follows seen by the two people" on public.follows for select to authenticated
+  using (follower = auth.uid() or followee = auth.uid());
+create policy "unfollow or remove a follower" on public.follows for delete to authenticated
+  using (follower = auth.uid() or followee = auth.uid());
+-- following and accepting go through the functions below
+
+create or replace function public.can_see_profile(p_user uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select p_user = auth.uid()
+      or coalesce((select is_public from profiles where id = p_user), false)
+      or exists (select 1 from follows where follower = auth.uid() and followee = p_user and status = 'accepted');
+$$;
+
+create or replace function public.follow_user(p_user uuid) returns text
+language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); v_status text;
+begin
+  if v_uid is null then raise exception 'Sign in first'; end if;
+  if p_user = v_uid then raise exception 'That is you'; end if;
+  if not exists (select 1 from profiles where id = p_user) then raise exception 'Profile not found'; end if;
+  insert into profiles (id) values (v_uid) on conflict do nothing;
+  v_status := case when (select is_public from profiles where id = p_user) then 'accepted' else 'requested' end;
+  insert into follows (follower, followee, status) values (v_uid, p_user, v_status)
+  on conflict (follower, followee) do nothing;
+  return (select status from follows where follower = v_uid and followee = p_user);
+end $$;
+
+create or replace function public.respond_follow(p_follower uuid, p_accept boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if p_accept then
+    update follows set status = 'accepted' where follower = p_follower and followee = auth.uid();
+  else
+    delete from follows where follower = p_follower and followee = auth.uid();
+  end if;
+end $$;
+
+-- switching to public lets everyone who asked in
+create or replace function public.set_profile_public(p_public boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into profiles (id) values (auth.uid()) on conflict do nothing;
+  update profiles set is_public = p_public where id = auth.uid();
+  if p_public then update follows set status = 'accepted' where followee = auth.uid() and status = 'requested'; end if;
+end $$;
+
+create or replace function public.profile_summary(p_user uuid) returns json
+language sql stable security definer set search_path = public as $$
+  select json_build_object(
+    'id', p.id, 'display_name', p.display_name, 'avatar_url', p.avatar_url, 'verified', p.verified,
+    'bio', p.bio, 'is_public', p.is_public, 'interests', p.interests,
+    'can_see', public.can_see_profile(p.id),
+    'hosted', (select count(*) from pulses where host_id = p.id),
+    'joined', (select count(*) from memberships where user_id = p.id and status = 'accepted'),
+    'followers', (select count(*) from follows where followee = p.id and status = 'accepted'),
+    'following', (select count(*) from follows where follower = p.id and status = 'accepted'),
+    'my_follow', (select status from follows where follower = auth.uid() and followee = p.id),
+    'follows_me', exists (select 1 from follows where follower = p.id and followee = auth.uid() and status = 'accepted')
+  ) from profiles p where p.id = p_user;
+$$;
+
+-- activities someone hosted / joined, newest first (empty if their profile is private to you)
+create or replace function public.profile_activity(p_user uuid) returns table (pulse_id uuid, kind text, at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select * from (
+    select id, 'hosted'::text, starts_at from pulses where host_id = p_user
+    union all
+    select p.id, 'joined'::text, p.starts_at from memberships m join pulses p on p.id = m.pulse_id
+    where m.user_id = p_user and m.status = 'accepted'
+  ) a
+  where public.can_see_profile(p_user)
+  order by 3 desc limit 120;
+$$;
+
+-- for the "Following" feed: what people I follow are hosting or joining (recent and upcoming)
+create or replace function public.following_pulses() returns table (pulse_id uuid, via uuid, kind text)
+language sql stable security definer set search_path = public as $$
+  with f as (select followee from follows where follower = auth.uid() and status = 'accepted')
+  select distinct on (x.id) x.id, x.via, x.kind from (
+    select p.id, p.host_id as via, 'hosted'::text as kind, p.starts_at from pulses p join f on f.followee = p.host_id
+    where p.ends_at > now() - interval '2 days'
+    union all
+    select p.id, m.user_id, 'joined', p.starts_at from memberships m join f on f.followee = m.user_id join pulses p on p.id = m.pulse_id
+    where m.status = 'accepted' and p.ends_at > now() - interval '2 days'
+  ) x
+  order by x.id, case x.kind when 'hosted' then 0 else 1 end
+  limit 150;
+$$;
+
+revoke all on function public.follow_user(uuid) from public, anon;
+revoke all on function public.respond_follow(uuid, boolean) from public, anon;
+revoke all on function public.set_profile_public(boolean) from public, anon;
+revoke all on function public.following_pulses() from public, anon;
+grant execute on function public.follow_user(uuid) to authenticated;
+grant execute on function public.respond_follow(uuid, boolean) to authenticated;
+grant execute on function public.set_profile_public(boolean) to authenticated;
+grant execute on function public.following_pulses() to authenticated;
+grant execute on function public.can_see_profile(uuid) to anon, authenticated;
+grant execute on function public.profile_summary(uuid) to anon, authenticated;
+grant execute on function public.profile_activity(uuid) to anon, authenticated;
