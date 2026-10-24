@@ -21,8 +21,8 @@ def main():
         if name in have: print("already queued", name); continue
         if name.startswith("r"):
             src = os.path.join(HERE, "out", name + ".mp4")
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-c:v", "libx264", "-preset", "slow", "-crf", "24", "-maxrate", "4M", "-bufsize", "8M",
-                            "-pix_fmt", "yuv420p", "-profile:v", "high", "-movflags", "+faststart", "-c:a", "aac", "-b:a", "128k", os.path.join(pub, name + ".mp4")], check=True)
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-c:v", "libx264", "-preset", "slow", "-crf", "24", "-maxrate", "4M", "-bufsize", "8M", "-g", "60", "-keyint_min", "60",
+                            "-pix_fmt", "yuv420p", "-profile:v", "high", "-movflags", "+faststart", "-c:a", "aac", "-ar", "48000", "-b:a", "128k", os.path.join(pub, name + ".mp4")], check=True)
             subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", "1.6", "-i", src, "-frames:v", "1", "-q:v", "3", os.path.join(pub, name + "-cover.jpg")], check=True)
             cap = json.load(open(os.path.join(HERE, "clips", name + ".json")))["caption"]
             q["posts"].append({"id": name, "type": "reel", "publish_at": when, "caption": cap, "video": f"ig/{name}.mp4", "cover": f"ig/{name}-cover.jpg"})

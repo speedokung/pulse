@@ -39,7 +39,7 @@ const fmt = new Intl.DateTimeFormat('th-TH', { weekday: 'short', day: 'numeric',
 const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 fetch('/ig/queue.json').then((r) => r.json()).then(({ posts }) => {
   const now = Date.now(), upcoming = posts.filter((p) => Date.parse(p.publish_at) > now).length;
-  document.getElementById('sum').textContent = `${posts.length} โพสต์ · รออีก ${upcoming} · ระบบโพสต์ให้อัตโนมัติไม่เกินวันละ 1 โพสต์`;
+  document.getElementById('sum').textContent = `${posts.length} โพสต์ · รออีก ${upcoming} · ระบบโพสต์ลง Instagram และเพจ Facebook ให้อัตโนมัติ ไม่เกินวันละ 1 โพสต์ต่อที่`;
   const weeks = new Map();
   posts.forEach((p) => { const d = new Date(p.publish_at); const monday = new Date(d); monday.setDate(d.getDate() - ((d.getDay() + 6) % 7)); const k = monday.toISOString().slice(0, 10); (weeks.get(k) || weeks.set(k, []).get(k)).push(p); });
   const list = document.getElementById('list');

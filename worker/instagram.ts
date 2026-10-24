@@ -21,17 +21,17 @@ export interface IgEnv {
   IG_PAUSED?: string;
 }
 
-interface QueueItem {
+export interface QueueItem {
   id: string; type: "reel" | "carousel"; publish_at: string; caption: string;
-  video?: string; cover?: string; images?: string[];
+  video?: string; cover?: string; images?: string[]; fb_caption?: string;
 }
-interface PostRow { id: string; status: "processing" | "published" | "error"; container_id: string | null; media_id: string | null; attempts: number; error: string | null; published_at: string | null; updated_at: string }
+export interface PostRow { id: string; status: "processing" | "published" | "error"; container_id: string | null; media_id: string | null; attempts: number; error: string | null; published_at: string | null; updated_at: string }
 
 const G = "https://graph.instagram.com/v22.0";
 const MIN_GAP_H = 20;          // never two posts within 20 hours, even if the plan fell behind
 const MAX_ATTEMPTS = 3;
 
-async function db(env: IgEnv, path: string, init: RequestInit = {}) {
+export async function db(env: IgEnv, path: string, init: RequestInit = {}) {
   const key = env.SUPABASE_SERVICE_ROLE_KEY!;
   const r = await fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, {
     ...init, headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json", prefer: "resolution=merge-duplicates,return=minimal", ...(init.headers || {}) },
@@ -39,7 +39,7 @@ async function db(env: IgEnv, path: string, init: RequestInit = {}) {
   if (!r.ok) throw new Error(`supabase ${r.status}: ${await r.text()}`);
   return r.status === 204 || r.status === 201 ? null : r.json();
 }
-const save = (env: IgEnv, row: Partial<PostRow> & { id: string }) =>
+export const save = (env: IgEnv, row: Partial<PostRow> & { id: string }) =>
   db(env, "ig_posts?on_conflict=id", { method: "POST", body: JSON.stringify({ ...row, updated_at: new Date().toISOString() }) });
 
 async function ig(path: string, params: Record<string, string>, token: string, method: "GET" | "POST" = "POST") {
@@ -77,7 +77,7 @@ export async function igTick(env: IgEnv, opts: { dryRun?: boolean } = {}): Promi
   const qr = await env.ASSETS.fetch(new Request(`${base}/ig/queue.json`));
   if (!qr.ok) return ["no queue.json"];
   const queue = ((await qr.json()) as { posts: QueueItem[] }).posts;
-  const rows = (await db(env, "ig_posts?select=*")) as PostRow[];
+  const rows = ((await db(env, "ig_posts?select=*")) as PostRow[]).filter((r) => !r.id.startsWith("fb:")); // fb: rows belong to facebook.ts
   const byId = new Map(rows.map((r) => [r.id, r]));
   const tok = await token(env, log);
   if (!tok) return [...log, "no token"];

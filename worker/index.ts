@@ -15,11 +15,15 @@
 //   LIFF_ID                                         plain text (optional, makes LINE messages open inside LINE)
 
 import { igTick } from "./instagram";
+import { fbTick } from "./facebook";
 
 export interface Env {
   IG_USER_ID?: string;
   IG_ACCESS_TOKEN?: string;
   IG_PAUSED?: string;
+  FB_PAGE_ID?: string;
+  FB_PAGE_TOKEN?: string;
+  FB_PAUSED?: string;
   ASSETS: Fetcher;
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
@@ -35,9 +39,10 @@ const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", ...extra } });
 
 export default {
-  // Instagram auto-poster (wrangler.jsonc → triggers.crons)
+  // Instagram + Facebook Page auto-posters (wrangler.jsonc → triggers.crons)
   async scheduled(_ev: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(igTick(env).then((l) => console.log("ig:", l.join(" | "))).catch((e) => console.log("ig error:", (e as Error).message)));
+    ctx.waitUntil(fbTick(env).then((l) => console.log("fb:", l.join(" | "))).catch((e) => console.log("fb error:", (e as Error).message)));
   },
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
@@ -49,7 +54,9 @@ export default {
       // run the Instagram poster by hand (same secret as the Supabase webhook); ?dry=1 only says what it would do
       if (url.pathname === "/api/ig/tick" && req.method === "POST") {
         if (!env.WEBHOOK_SECRET || req.headers.get("x-webhook-secret") !== env.WEBHOOK_SECRET) return json({ error: "forbidden" }, 403);
-        return json({ log: await igTick(env, { dryRun: url.searchParams.get("dry") === "1" }) });
+        const dryRun = url.searchParams.get("dry") === "1";
+        const run = (f: () => Promise<string[]>) => f().catch((e) => [`error: ${(e as Error).message}`]);
+        return json({ log: await run(() => igTick(env, { dryRun })), fb: await run(() => fbTick(env, { dryRun })) });
       }
       if (url.pathname.startsWith("/api/")) return json({ error: "not found" }, 404);
       if (url.pathname === "/") return await withPreview(req, env, url.searchParams.get("p"));
