@@ -12,12 +12,16 @@
   // Secrets (SUPABASE_SERVICE_ROLE_KEY, LINE_MESSAGING_TOKEN, WEBHOOK_SECRET) are NOT here:
   // add them in Cloudflare → Worker → Settings → Variables and Secrets (the top section, not Builds).
   "vars": {
-    "APP_URL": "https://pulse.speedokung.workers.dev",
+    "APP_URL": "https://thaew.com",
     "SUPABASE_URL": "https://hyoclbxplmetxknvdbvq.supabase.co",
     "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5b2NsYnhwbG1ldHhrbnZkYnZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI2NTIzMTgsImV4cCI6MjEwODIyODMxOH0.mFEKDQ-HOFsaFeViJmvBwWtdc7pYCxelSEFzDbWn_3A",
     "LINE_LOGIN_CHANNEL_ID": "2012181363",
     "LIFF_ID": "2012181363-DmkpiLHR"
   },
   "keep_vars": true,
+  "routes": [
+    { "pattern": "thaew.com", "custom_domain": true },
+    { "pattern": "www.thaew.com", "custom_domain": true }
+  ],
   "observability": { "enabled": true }
 }

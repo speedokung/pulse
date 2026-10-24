@@ -127,7 +127,7 @@ Replace the `wrangler.jsonc` in your GitHub repo with this one (keep `"name"` eq
 | `SUPABASE_URL` | Text | same as `VITE_SUPABASE_URL` |
 | `SUPABASE_ANON_KEY` | Text | same as `VITE_SUPABASE_ANON_KEY` |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Secret** | Supabase → Project Settings → API Keys → `service_role` (never put this in the app) |
-| `APP_URL` | Text | e.g. `https://pulse.thaew.workers.dev` |
+| `APP_URL` | Text | e.g. `https://thaew.com` |
 | `LINE_LOGIN_CHANNEL_ID` | Text | LINE Login channel ID (below) |
 | `LIFF_ID` | Text | LIFF ID (below) |
 | `LINE_MESSAGING_TOKEN` | **Secret** | Messaging API channel access token (below) |
@@ -142,7 +142,7 @@ Short links need no variables; they work as soon as the Worker is deployed.
    - Basic settings → **Linked LINE Official Account**: pick your OA (so people can add it as a friend while linking, which LINE requires before it can message them).
    - Copy the **Channel ID** → Worker variable `LINE_LOGIN_CHANNEL_ID`.
 3. **LIFF app**: in that LINE Login channel → LIFF → Add.
-   - Size: **Full**. Endpoint URL: your `APP_URL` (e.g. `https://pulse.thaew.workers.dev`).
+   - Size: **Full**. Endpoint URL: your `APP_URL` (e.g. `https://thaew.com`).
    - Scopes: **openid** and **profile**. Add friend option: **On (Aggressive)**.
    - Turn on **shareTargetPicker** (LIFF tab → "Share target picker").
    - Copy the **LIFF ID** → Cloudflare **build** variable `VITE_LIFF_ID` *and* Worker variable `LIFF_ID`.

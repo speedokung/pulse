@@ -11,7 +11,7 @@
 //   LINE_LOGIN_CHANNEL_ID                           plain text (LINE Login channel that owns the LIFF app)
 //   LINE_MESSAGING_TOKEN                            secret (Messaging API channel access token of your LINE OA)
 //   WEBHOOK_SECRET                                  secret (any long random string; also set on the Supabase webhook)
-//   APP_URL                                         plain text, e.g. https://pulse.thaew.workers.dev
+//   APP_URL                                         plain text, e.g. https://thaew.com
 //   LIFF_ID                                         plain text (optional, makes LINE messages open inside LINE)
 
 export interface Env {
@@ -32,6 +32,7 @@ const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
+    if (url.hostname.startsWith("www.")) { url.hostname = url.hostname.slice(4); return Response.redirect(url.toString(), 301); }
     try {
       if (url.pathname === "/api/resolve-map") return await resolveMap(url);
       if (url.pathname === "/api/line/link" && req.method === "POST") return await lineLink(req, env);
