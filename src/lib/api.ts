@@ -180,10 +180,20 @@ export async function resolveMapLink(url: string): Promise<{ lat?: number; lng?:
   } catch { return null; }
 }
 
+/** Tell the other side on LINE (host: someone joined; requester: you were accepted). Best effort. */
+async function pingMember(body: { pulse_id: string; event: "join" | "accept"; user_id?: string }) {
+  try {
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    if (!token) return;
+    await fetch("/api/line/member", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+  } catch { /* LINE ping is optional */ }
+}
+
 export async function joinPulse(id: string): Promise<MemberStatus> {
   if (!configured) return demo.demoJoin(id);
   const { data, error } = await supabase.rpc("join_pulse", { p_id: id });
   if (error) throw error;
+  void pingMember({ pulse_id: id, event: "join" });
   return data as MemberStatus;
 }
 export async function leavePulse(id: string) {
@@ -193,6 +203,7 @@ export async function leavePulse(id: string) {
 export async function respondRequest(id: string, user: string, accept: boolean) {
   if (!configured) return demo.demoRespond(id, user, accept);
   const { error } = await supabase.rpc("respond_request", { p_id: id, p_user: user, p_accept: accept }); if (error) throw error;
+  if (accept) void pingMember({ pulse_id: id, event: "accept", user_id: user });
 }
 export async function extendPulse(id: string, minutes: number) {
   if (!configured) return demo.demoExtend(id, minutes);

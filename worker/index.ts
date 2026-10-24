@@ -51,6 +51,7 @@ export default {
     try {
       if (url.pathname === "/api/resolve-map") return await resolveMap(url);
       if (url.pathname === "/api/line/link" && req.method === "POST") return await lineLink(req, env);
+      if (url.pathname === "/api/line/member" && req.method === "POST") return await memberNotify(req, env, ctx);
       if (url.pathname === "/api/notify" && req.method === "POST") return await notify(req, env, ctx);
       // run the Instagram poster by hand (same secret as the Supabase webhook); ?dry=1 only says what it would do
       if (url.pathname === "/api/ig/tick" && req.method === "POST") {
@@ -290,6 +291,60 @@ async function notify(req: Request, env: Env, ctx: ExecutionContext): Promise<Re
     });
   })());
   return json({ ok: true });
+}
+
+/* ---------------- LINE ping for joins / accepted requests ----------------
+   The app calls this right after join_pulse / respond_request succeeds, with the user's own Supabase token.
+   Nothing is trusted from the body except ids: the membership is re-read with the service key.
+     {pulse_id, event:"join"}                 → the host hears "X joined" / "X asks to join"
+     {pulse_id, event:"accept", user_id}      → (caller must be the host) the requester hears "you're in"   */
+
+async function memberNotify(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  if (!env.LINE_MESSAGING_TOKEN) return json({ skipped: "LINE_MESSAGING_TOKEN not set" });
+  const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!jwt || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return json({ error: "unauthorized" }, 401);
+  const who = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, { headers: { apikey: env.SUPABASE_ANON_KEY, authorization: `Bearer ${jwt}` } });
+  if (!who.ok) return json({ error: "unauthorized" }, 401);
+  const caller = ((await who.json()) as { id: string }).id;
+  const { pulse_id, event, user_id } = (await req.json()) as { pulse_id?: string; event?: string; user_id?: string };
+  const uuid = /^[0-9a-f-]{36}$/i;
+  if (!pulse_id || !uuid.test(pulse_id) || (event !== "join" && event !== "accept") || (user_id && !uuid.test(user_id))) return json({ error: "bad request" }, 400);
+
+  const member = event === "join" ? caller : user_id;
+  if (!member) return json({ error: "bad request" }, 400);
+  // one ping per (pulse, member, event) per day, so re-clicks don't spam
+  const cache = caches.default, key = new Request(`https://thaew.com/_ping/${pulse_id}/${member}/${event}`);
+  if (await cache.match(key)) return json({ skipped: "already sent" });
+
+  const [p] = (await sb(env, `pulses?id=eq.${pulse_id}&select=id,host_id,title,starts_at,need`)) as PulseRow[];
+  if (!p) return json({ error: "not found" }, 404);
+  const [m] = (await sb(env, `memberships?pulse_id=eq.${pulse_id}&user_id=eq.${member}&select=status,created_at`)) as { status: string; created_at: string }[];
+  if (!m) return json({ skipped: "no membership" });
+  let to: string, text: string;
+  if (event === "join") {
+    if (caller === p.host_id) return json({ skipped: "host" });
+    if (Date.now() - Date.parse(m.created_at) > 15 * 60_000) return json({ skipped: "old" });
+    to = p.host_id;
+    const [prof] = (await sb(env, `profiles?id=eq.${caller}&select=display_name`)) as { display_name: string | null }[];
+    const name = prof?.display_name || "มีคน";
+    text = m.status === "accepted" ? `🙌 ${name} จอย “${p.title}” แล้ว` : `🙋 ${name} ขอจอย “${p.title}” · เข้าไปกดรับได้เลย`;
+  } else {
+    if (caller !== p.host_id || m.status !== "accepted") return json({ skipped: "not allowed" });
+    to = member;
+    text = `✅ รับคุณเข้าก๊วน “${p.title}” แล้ว · เริ่ม ${bkkTime(p.starts_at)} น. ดูจุดนัดในแถวได้เลย`;
+  }
+  const [link] = (await sb(env, `line_links?user_id=eq.${to}&select=line_user_id`)) as { line_user_id: string }[];
+  if (!link) return json({ skipped: "not linked to LINE" });
+  ctx.waitUntil(cache.put(key, new Response("1", { headers: { "cache-control": "max-age=86400" } })));
+  const r = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: { authorization: `Bearer ${env.LINE_MESSAGING_TOKEN}`, "content-type": "application/json" },
+    body: JSON.stringify({ to: link.line_user_id, messages: [{
+      type: "template", altText: text,
+      template: { type: "buttons", text: text.slice(0, 160), actions: [{ type: "uri", label: "เปิดก๊วน", uri: openUrl(env, p.id) }] },
+    }] }),
+  });
+  return json(r.ok ? { ok: true } : { error: `line ${r.status}` }, r.ok ? 200 : 502);
 }
 
 /* ---------------- link previews for shared Pulses ---------------- */

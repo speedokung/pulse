@@ -8,7 +8,8 @@ Reads clips/<name>.json:
   "vo":    [[0.15, "จองสนามไว้แล้ว เพื่อนเทอีกแล้ว", 2.8], ...]   start s, text, max seconds
   "music": {"file": "carefree", "from": 0}   music/<file>.mp3 (Kevin MacLeod, CC BY 4.0 — credit in the caption)
 
-Voice: Microsoft Edge neural TTS (edge-tts, free). A line that runs longer than its slot is re-spoken faster.
+Voice: "gemini:<Voice>" = Gemini TTS (gemini-3.8-flash-tts, free tier; key in GEMINI_API_KEY or .gemini_key; optional
+"style" in the clip script), otherwise Microsoft Edge neural TTS (edge-tts, free). A line that runs longer than its slot is re-spoken faster.
 Mix: ambient footage sound low, music ducked under the voice, whole thing normalised to -14 LUFS (Reels loudness).
 """
 import asyncio, hashlib, json, os, subprocess, sys
@@ -20,7 +21,41 @@ CA = "/root/.ccr/ca-bundle.crt"          # the cloud workspace's proxy CA; not n
 if os.path.exists(CA):
     import certifi
     certifi.where = lambda: CA
-import edge_tts
+import base64, ssl, urllib.request
+try:
+    import edge_tts
+except ImportError:
+    edge_tts = None
+
+GEMINI_MODEL = "gemini-3.8-flash-tts"
+DEFAULT_STYLE = "สดใส เป็นกันเอง เหมือนเพื่อนชวนไปเล่น พูดเร็วนิดๆ แบบคลิปโซเชียล"
+
+def gemini_key():
+    k = os.environ.get("GEMINI_API_KEY")
+    p = os.path.join(HERE, ".gemini_key")
+    if not k and os.path.exists(p): k = open(p).read().strip()
+    if not k: sys.exit("Gemini TTS needs GEMINI_API_KEY (or marketing/reels/.gemini_key)")
+    return k
+
+def gemini_tts(text, voice, style, out_wav):
+    """Gemini TTS (free tier) -> 24 kHz mono WAV."""
+    ctx = ssl.create_default_context(cafile=CA) if os.path.exists(CA) else None
+    def call(voice_config):
+        body = {"contents": [{"role": "user", "parts": [{"text": text, "speech_metadata": {"style": style}}]}],
+                "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": {"voiceConfig": voice_config}}}
+        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+                                     data=json.dumps(body).encode(), headers={"content-type": "application/json", "x-goog-api-key": gemini_key()})
+        return json.load(urllib.request.urlopen(req, context=ctx, timeout=120))
+    try:
+        j = call({"voice": voice})
+    except urllib.error.HTTPError as e:
+        if e.code != 400: raise
+        j = call({"prebuiltVoiceConfig": {"voiceName": voice}})   # older request shape
+    data = base64.b64decode(j["candidates"][0]["content"]["parts"][0]["inlineData"]["data"])
+    if data[:4] != b"RIFF":   # raw PCM -> wav
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "s16le", "-ar", "24000", "-ac", "1", "-i", "-", out_wav], input=data, check=True)
+    else:
+        open(out_wav, "wb").write(data)
 
 def credit(music_file):
     title = json.load(open(os.path.join(HERE, "music", "credits.json")))[music_file]
@@ -29,8 +64,25 @@ def credit(music_file):
 def dur(p):
     return float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", p]).decode())
 
-def say(text, voice, slot):
+def trim(src, dst, tempo=1.0):
+    edge = "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.04"
+    af = f"{edge},areverse,{edge},areverse" + (f",atempo={tempo}" if tempo != 1.0 else "")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-af", af, "-ar", "48000", dst], check=True)
+
+def say(text, voice, slot, style=None):
     os.makedirs(os.path.join(HERE, "cache", "vo"), exist_ok=True)
+    if voice.startswith("gemini:"):
+        name, style = voice.split(":", 1)[1], style or DEFAULT_STYLE
+        key = hashlib.md5(f"{voice}|{style}|{text}".encode()).hexdigest()[:10]
+        raw = os.path.join(HERE, "cache", "vo", key + "-raw.wav")
+        if not os.path.exists(raw): gemini_tts(text, name, style, raw)
+        for tempo in (1.0, 1.08, 1.16, 1.25):   # a line that overruns its scene is sped up slightly
+            out = os.path.join(HERE, "cache", "vo", f"{key}-{tempo}.wav")
+            if not os.path.exists(out): trim(raw, out, tempo)
+            d = dur(out)
+            if d <= slot: return out, d
+        print(f"  ! '{text}' is {d:.1f}s for a {slot:.1f}s slot", file=sys.stderr)
+        return out, d
     for rate in (5, 15, 25, 35):
         key = hashlib.md5(f"{voice}|{rate}|{text}".encode()).hexdigest()[:10]
         out = os.path.join(HERE, "cache", "vo", key + ".mp3")
@@ -59,7 +111,7 @@ def main(name):
     out = os.path.join(HERE, "out", name + "-vo.mp4")
     total = dur(src)
     voice = spec.get("voice", "th-TH-PremwadeeNeural")
-    lines = [(t, *say(text, voice, slot)) for t, text, slot in spec.get("vo", [])]
+    lines = [(t, *say(text, voice, slot, spec.get("style"))) for t, text, slot in spec.get("vo", [])]
     music = spec.get("music") or {}
 
     args = ["ffmpeg", "-v", "error", "-y", "-i", src]
