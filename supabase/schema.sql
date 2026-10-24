@@ -140,12 +140,21 @@ alter table public.pulses add column if not exists level text not null default '
 alter table public.pulses add column if not exists series_id uuid;
 create index if not exists pulses_series on public.pulses (series_id);
 
+-- optional sub-type within a category (badminton, board games, run…); keys live in the app
+alter table public.pulses add column if not exists sub text;
+do $$ begin
+  alter table public.pulses add constraint pulses_sub_key check (sub is null or sub ~ '^[a-z_]{1,24}$');
+exception when duplicate_object then null; end $$;
+create index if not exists pulses_sub on public.pulses (sub);
+
 drop function if exists public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text);
+drop function if exists public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text,text,int);
+drop function if exists public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text,text,int,text);
 create or replace function public.create_pulse(
   p_category pulse_category, p_title text, p_need int,
   p_starts_at timestamptz, p_duration_min int, p_visibility exact_visibility,
   p_lat double precision, p_lng double precision, p_place text, p_area text,
-  p_level text default 'any', p_repeat_weeks int default 1
+  p_level text default 'any', p_repeat_weeks int default 1, p_sub text default null
 ) returns uuid
 language plpgsql security definer set search_path = public as $$
 declare v_uid uuid := auth.uid(); v_id uuid; v_first uuid; v_start timestamptz; v_series uuid; i int;
@@ -163,12 +172,12 @@ begin
   v_series := case when p_repeat_weeks > 1 then gen_random_uuid() else null end;
   for i in 0 .. p_repeat_weeks - 1 loop
     v_start := greatest(p_starts_at, now()) + make_interval(days => 7 * i);
-    insert into pulses (host_id, category, title, need, starts_at, ends_at, visibility, area_name, rough_lat, rough_lng, level, series_id)
+    insert into pulses (host_id, category, title, need, starts_at, ends_at, visibility, area_name, rough_lat, rough_lng, level, series_id, sub)
     values (v_uid, p_category, trim(p_title), p_need, v_start, v_start + make_interval(mins => p_duration_min),
             p_visibility, coalesce(nullif(trim(p_area), ''), 'Nearby'),
             floor(p_lat / 0.003) * 0.003 + 0.0015,
             floor(p_lng / 0.003) * 0.003 + 0.0015,
-            coalesce(p_level, 'any'), v_series)
+            coalesce(p_level, 'any'), v_series, nullif(trim(p_sub), ''))
     returning id into v_id;
     insert into pulse_locations (pulse_id, lat, lng, place_name)
     values (v_id, p_lat, p_lng, coalesce(nullif(trim(p_place), ''), nullif(trim(p_area), ''), 'Pinned spot'));
@@ -239,13 +248,13 @@ begin
   where id = p_id and host_id = auth.uid() and ends_at > now();
 end $$;
 
-revoke all on function public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text,text,int) from public, anon;
+revoke all on function public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text,text,int,text) from public, anon;
 revoke all on function public.join_pulse(uuid)               from public, anon;
 revoke all on function public.leave_pulse(uuid)              from public, anon;
 revoke all on function public.respond_request(uuid,uuid,boolean) from public, anon;
 revoke all on function public.end_pulse(uuid)                from public, anon;
 revoke all on function public.extend_pulse(uuid,int)          from public, anon;
-grant execute on function public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text,text,int) to authenticated;
+grant execute on function public.create_pulse(pulse_category,text,int,timestamptz,int,exact_visibility,double precision,double precision,text,text,text,int,text) to authenticated;
 grant execute on function public.join_pulse(uuid)               to authenticated;
 grant execute on function public.leave_pulse(uuid)              to authenticated;
 grant execute on function public.respond_request(uuid,uuid,boolean) to authenticated;
