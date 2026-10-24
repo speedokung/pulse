@@ -1,9 +1,13 @@
-import type { FeedPost, LatLng, Pulse } from "../lib/types";
+import { useEffect, useState } from "react";
+import type { FeedPost, FollowingItem, LatLng, Pulse } from "../lib/types";
+import { loadFollowingFeed } from "../lib/api";
+import { openProfile } from "../lib/profileBus";
+import { PulseCard } from "./PulseCard";
 import { CATS, catName } from "../lib/categories";
 import { accepted, HOUR, isOver, isParticipant, ms, openSpots, pos, status } from "../lib/pulse";
 import { distanceM } from "../lib/geo";
 import { ago, dist, walkMin } from "../lib/format";
-import { Actions, JoinButton, NavButton, Place, When } from "./ui";
+import { Actions, Avatar, JoinButton, NavButton, Place, When } from "./ui";
 import { Composer, photoSrc, PostLine } from "./Posts";
 import { t } from "../lib/i18n";
 
@@ -70,5 +74,40 @@ function FeedCard({ p, posts, uid, me, a }: { p: Pulse; posts: FeedPost[]; uid: 
       )}
       {isParticipant(p, uid) && !past && <Composer p={p} uid={uid} a={a} />}
     </article>
+  );
+}
+
+/** What people you follow are hosting or joining, at any distance. */
+export function FollowingFeed({ uid, me, selectedId, a, canFollow, reloadKey, onLoaded }: {
+  uid: string | null; me: LatLng; selectedId: string | null; a: Actions; canFollow: boolean; reloadKey: number;
+  onLoaded: (list: Pulse[]) => void;
+}) {
+  const [items, setItems] = useState<FollowingItem[] | null>(null);
+  useEffect(() => {
+    if (!canFollow) { setItems([]); return; }
+    let dead = false;
+    loadFollowingFeed().then((l) => { if (!dead) { setItems(l); onLoaded(l.map((x) => x.pulse)); } }).catch(() => { if (!dead) setItems([]); });
+    return () => { dead = true; };
+  }, [reloadKey, canFollow]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!canFollow) return <div className="empty">{t("ffSignIn")}</div>;
+  if (items === null) return <div className="empty">…</div>;
+  if (!items.length) return <div className="empty" dangerouslySetInnerHTML={{ __html: t("ffEmpty") }} />;
+  const now = Date.now();
+  const on = items.filter((x) => !isOver(x.pulse, now)).sort((p, q) => ms(p.pulse.starts_at) - ms(q.pulse.starts_at));
+  const done = items.filter((x) => isOver(x.pulse, now)).sort((p, q) => ms(q.pulse.ends_at) - ms(p.pulse.ends_at));
+  const Row = ({ x }: { x: FollowingItem }) => (
+    <div className="ffrow">
+      <button type="button" className="linkbtn ffwho" onClick={() => openProfile(x.via.id)}>
+        <Avatar name={x.via.display_name} url={x.via.avatar_url} size={22} />
+        <span>{x.kind === "hosted" ? t("ffHosts", { n: x.via.display_name || t("someone") }) : t("ffJoins", { n: x.via.display_name || t("someone") })}</span>
+      </button>
+      <PulseCard p={x.pulse} uid={uid} me={me} sel={selectedId === x.pulse.id} a={a} />
+    </div>
+  );
+  return (
+    <div className="feed">
+      {on.length > 0 && <><div className="slot">{t("gSoon")}</div>{on.map((x) => <Row key={x.pulse.id} x={x} />)}</>}
+      {done.length > 0 && <><div className="slot">{t("gWrapped")}</div>{done.map((x) => <Row key={x.pulse.id} x={x} />)}</>}
+    </div>
   );
 }

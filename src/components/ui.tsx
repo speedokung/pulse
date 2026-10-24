@@ -1,3 +1,4 @@
+import { openProfile } from "../lib/profileBus";
 import { subName } from "../lib/categories";
 import type { Contact, FeedPost, Level, Pulse, Signal } from "../lib/types";
 import { hostedCount } from "../lib/trust";
@@ -110,7 +111,7 @@ export function HostLine({ p, uid }: { p: Pulse; uid: string | null }) {
   const n = hostedCount(p.host_id), v = p.host?.verified;
   return (
     <span className="hostline">
-      {by(p, uid)}
+      <button type="button" className="linkbtn" onClick={(e) => { e.stopPropagation(); openProfile(p.host_id); }}>{by(p, uid)}</button>
       {v && !isHost(p, uid) && <span className="verified" title={v === "google" ? t("vGoogle") : t("vLine")} aria-label={v === "google" ? t("vGoogle") : t("vLine")}><Check /></span>}
       {!isHost(p, uid) && <span className="hosted">· {n > 0 ? t("hosted", { n }) : t("newHost")}</span>}
     </span>
@@ -129,5 +130,25 @@ export function SignalSummary({ p }: { p: Pulse }) {
       {omw > 0 && <span className="omw">{t("sComing", { n: omw })}</span>}
       {int > 0 && <span>{t("sInterestedN", { n: int })}</span>}
     </span>
+  );
+}
+
+/** Host + accepted people as tappable faces (each opens that person's profile). */
+export function WhoGoing({ p }: { p: Pulse }) {
+  const people = [{ id: p.host_id, prof: p.host ?? null, host: true }, ...p.memberships.filter((m) => m.status === "accepted").map((m) => ({ id: m.user_id, prof: m.profile ?? null, host: false }))];
+  if (people.length < 2) return null;
+  return (
+    <div className="whogoing">
+      <div className="meta">{t("whoGoing")}</div>
+      <div className="faces">
+        {people.slice(0, 12).map((x) => (
+          <button type="button" key={x.id} className="face" onClick={(e) => { e.stopPropagation(); openProfile(x.id); }} title={x.prof?.display_name ?? ""}>
+            <Avatar name={x.prof?.display_name} url={x.prof?.avatar_url} size={34} />
+            <span>{x.prof?.display_name || t("someone")}</span>
+          </button>
+        ))}
+        {people.length > 12 && <span className="meta">+{people.length - 12}</span>}
+      </div>
+    </div>
   );
 }

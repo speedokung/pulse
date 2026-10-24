@@ -3,7 +3,8 @@ import { CATS, catName } from "../lib/categories";
 import { accepted, isHost, isOver, isParticipant, myStatus, pos, showsExact, status } from "../lib/pulse";
 import { distanceM } from "../lib/geo";
 import { dist, walkMin } from "../lib/format";
-import { Actions, Avatar, HostLine, JoinButton, Tags, Lock, NavButton, Place, Seats, When } from "./ui";
+import { Actions, Avatar, HostLine, JoinButton, Tags, Lock, NavButton, Place, Seats, When, WhoGoing } from "./ui";
+import { openProfile } from "../lib/profileBus";
 import { Composer, photoSrc, PostLine } from "./Posts";
 import { ContactBox, GroupChat, SignalsBox } from "./Contact";
 import { t } from "../lib/i18n";
@@ -46,6 +47,7 @@ export function PulseDetail({ p, uid, me, posts, a }: { p: Pulse; uid: string | 
         </div>
       )}
 
+      <WhoGoing p={p} />
       <SignalsBox p={p} uid={uid} a={a} />
 
       {host && !past && (
@@ -54,8 +56,10 @@ export function PulseDetail({ p, uid, me, posts, a }: { p: Pulse; uid: string | 
             <div className="reqs"><div className="meta">{t("requests")}</div>
               {reqs.map((r) => (
                 <div className="req" key={r.user_id}>
-                  <Avatar name={r.profile?.display_name} url={r.profile?.avatar_url} />
-                  <span>{r.profile?.display_name || t("someone")}</span>
+                  <button type="button" className="linkbtn req-who" onClick={() => openProfile(r.user_id)}>
+                    <Avatar name={r.profile?.display_name} url={r.profile?.avatar_url} />
+                    <span>{r.profile?.display_name || t("someone")}</span>
+                  </button>
                   <button className="mini pri" onClick={() => a.respond(p, r.user_id, true)}>{t("accept")}</button>
                   <button className="mini" onClick={() => a.respond(p, r.user_id, false)}>{t("decline")}</button>
                 </div>

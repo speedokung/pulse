@@ -23,7 +23,8 @@ export interface Auth {
   /** Popup flow: a Google ID token from Google's own button. */
   signInWithGoogleToken: (token: string, nonce: string) => Promise<void>;
   signOut: () => Promise<void>;
-  saveProfile: (p: { display_name: string; interests: Category[] }) => Promise<void>;
+  saveProfile: (p: { display_name: string; interests: Category[]; bio?: string | null }) => Promise<void>;
+  setPublic: (v: boolean) => Promise<void>;
 }
 
 const hasGoogle = (u: User) => (u.identities || []).some((i) => i.provider === "google");
@@ -43,7 +44,7 @@ export function useAuth(): Auth {
     if (applied.current === key) return;
     applied.current = key;
     setUser(u);
-    const { data } = await supabase.from("profiles").select("display_name,avatar_url,interests").eq("id", u.id).maybeSingle();
+    const { data } = await supabase.from("profiles").select("display_name,avatar_url,interests,bio,is_public").eq("id", u.id).maybeSingle();
     let prof = data as MyProfile | null;
     if (hasGoogle(u)) {
       const m = u.user_metadata || {};
@@ -55,7 +56,7 @@ export function useAuth(): Auth {
         if (!error) prof = { interests: [], ...prof, ...row } as MyProfile;
       }
     }
-    setProfile(prof ? { display_name: prof.display_name, avatar_url: prof.avatar_url ?? null, interests: prof.interests ?? [] } : null);
+    setProfile(prof ? { display_name: prof.display_name, avatar_url: prof.avatar_url ?? null, interests: prof.interests ?? [], bio: prof.bio ?? null, is_public: prof.is_public ?? true } : null);
     if (hasGoogle(u)) syncVerified().catch(() => {}); // the "verified" badge on their Pulses
   }, []);
 
@@ -144,19 +145,25 @@ export function useAuth(): Auth {
     if (r.data.session) await apply(r.data.session.user);
   }, [apply]);
 
-  const saveProfile = useCallback(async (p: { display_name: string; interests: Category[] }) => {
+  const saveProfile = useCallback(async (p: { display_name: string; interests: Category[]; bio?: string | null }) => {
     if (!configured) { setProfile((x) => ({ avatar_url: null, ...x, ...p })); return; }
     if (!user) throw new Error("Not signed in yet");
-    const { error } = await supabase.from("profiles").upsert({ id: user.id, display_name: p.display_name, interests: p.interests, avatar_url: profile?.avatar_url ?? null });
+    const row = { id: user.id, display_name: p.display_name, interests: p.interests, avatar_url: profile?.avatar_url ?? null, bio: p.bio?.trim() || null };
+    const { error } = await supabase.from("profiles").upsert(row);
     if (error) throw error;
-    setProfile({ avatar_url: profile?.avatar_url ?? null, ...p });
+    setProfile({ ...profile, ...row, is_public: profile?.is_public ?? true });
   }, [user, profile]);
+
+  const setPublic = useCallback(async (v: boolean) => {
+    if (configured) { const { error } = await supabase.rpc("set_profile_public", { p_public: v }); if (error) throw error; }
+    setProfile((x) => (x ? { ...x, is_public: v } : x));
+  }, []);
 
   return {
     ready,
     uid: configured ? user?.id ?? null : DEMO_UID,
     isGuest: configured ? !user || !hasGoogle(user) : true,
     email: user && hasGoogle(user) ? user.email ?? null : null,
-    profile, error, notice, signInWithGoogle, signInWithGoogleToken, signOut, saveProfile,
+    profile, error, notice, signInWithGoogle, signInWithGoogleToken, signOut, saveProfile, setPublic,
   };
 }

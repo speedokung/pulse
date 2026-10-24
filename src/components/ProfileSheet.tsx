@@ -3,7 +3,8 @@ import { inAppBrowser, renderGoogleButton } from "../lib/google";
 import { getLang } from "../lib/i18n";
 import { prefersDark } from "../lib/mapStyle";
 import type { LatLng } from "../lib/types";
-import { loadNotifyPrefs, myLineLink, saveNotifyPrefs, startLineLink } from "../lib/api";
+import { loadFollowRequests, loadNotifyPrefs, myLineLink, respondFollow, saveNotifyPrefs, startLineLink } from "../lib/api";
+import type { FollowRequest } from "../lib/types";
 import { completeLineLink, inLineApp, lineConfigured, openLineToLink } from "../lib/line";
 import type { Category } from "../lib/types";
 import { CAT_KEYS, CATS, catName } from "../lib/categories";
@@ -24,7 +25,18 @@ const G = () => (
 /**
  * Profile + sign-in. `reason` is set when someone tries to join/post/drop without a name yet.
  */
-export function ProfileSheet({ auth, me, reason, onClose, toast }: { auth: Auth; me: LatLng; reason: string | null; onClose: () => void; toast: (s: string) => void }) {
+export function ProfileSheet({ auth, me, reason, onClose, toast, onViewMine }: { auth: Auth; me: LatLng; reason: string | null; onClose: () => void; toast: (s: string) => void; onViewMine?: () => void }) {
+  const [bio, setBio] = useState(auth.profile?.bio ?? "");
+  const [reqs, setReqs] = useState<FollowRequest[]>([]);
+  const uid = auth.uid;
+  useEffect(() => { if (uid && !reason) loadFollowRequests(uid).then(setReqs).catch(() => {}); }, [uid, reason]);
+  const answer = async (f: string, ok: boolean) => {
+    try { await respondFollow(f, ok); setReqs((l) => l.filter((r) => r.follower !== f)); toast(ok ? t("tAccepted") : t("tDeclined")); }
+    catch (e) { toast((e as Error).message); }
+  };
+  const togglePrivate = async (priv: boolean) => {
+    try { await auth.setPublic(!priv); if (!priv) setReqs([]); } catch (e) { toast((e as Error).message); }
+  };
   const [name, setName] = useState(auth.profile?.display_name && auth.profile.display_name !== "Someone" ? auth.profile.display_name : "");
   const [interests, setInterests] = useState<Category[]>(auth.profile?.interests ?? []);
   const [busy, setBusy] = useState(false);
@@ -51,7 +63,7 @@ export function ProfileSheet({ auth, me, reason, onClose, toast }: { auth: Auth;
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    try { setBusy(true); await auth.saveProfile({ display_name: name.trim(), interests }); toast(t("pfSaved")); onClose(); }
+    try { setBusy(true); await auth.saveProfile({ display_name: name.trim(), interests, bio }); toast(t("pfSaved")); onClose(); }
     catch { toast(t("pfSaveFail")); }
     finally { setBusy(false); }
   };
@@ -90,7 +102,31 @@ export function ProfileSheet({ auth, me, reason, onClose, toast }: { auth: Auth;
             </button>
           ))}
         </div>
-        {!reason && <LineSection auth={auth} me={me} interests={interests} toast={toast} />}
+        {!reason && (
+          <>
+            <label className="f" htmlFor="pf-bio">{t("pfBio")}
+              <textarea id="pf-bio" maxLength={160} rows={2} value={bio} onChange={(e) => setBio(e.target.value)} placeholder={t("pfBioPh")} />
+            </label>
+            <label className="switchrow" htmlFor="pf-private">
+              <span><b>{t("pfPrivate")}</b><small>{t("pfPrivateSub")}</small></span>
+              <input id="pf-private" type="checkbox" role="switch" checked={auth.profile?.is_public === false} onChange={(e) => togglePrivate(e.target.checked)} />
+            </label>
+            {reqs.length > 0 && (
+              <div className="reqs"><div className="meta">{t("pfRequests")} · {reqs.length}</div>
+                {reqs.map((r) => (
+                  <div className="req" key={r.follower}>
+                    <Avatar name={r.profile?.display_name} url={r.profile?.avatar_url} />
+                    <span>{r.profile?.display_name || t("someone")}</span>
+                    <button type="button" className="mini pri" onClick={() => answer(r.follower, true)}>{t("accept")}</button>
+                    <button type="button" className="mini" onClick={() => answer(r.follower, false)}>{t("decline")}</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {onViewMine && <button type="button" className="mini pv-mine" onClick={onViewMine}>{t("pvMine")}</button>}
+            <LineSection auth={auth} me={me} interests={interests} toast={toast} />
+          </>
+        )}
         <div className="btns">
           {!auth.isGuest && <button type="button" className="ghostbtn" onClick={async () => { await auth.signOut(); toast(t("pfSignedOut")); onClose(); }}>{t("pfSignOut")}</button>}
           <button type="button" className="ghostbtn" onClick={onClose}>{reason ? t("pfNotNow") : t("close")}</button>

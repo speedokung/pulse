@@ -10,7 +10,18 @@ export interface LatLng { lat: number; lng: number }
 /** What other people see about someone. */
 export interface PublicProfile { display_name: string; avatar_url?: string | null; verified?: Verified }
 
-export interface MyProfile { display_name: string; avatar_url: string | null; interests: Category[] }
+export interface MyProfile { display_name: string; avatar_url: string | null; interests: Category[]; bio?: string | null; is_public?: boolean }
+
+export type FollowStatus = "requested" | "accepted";
+/** What a profile page shows. `can_see` is false for a private profile you don't follow. */
+export interface ProfileSummary {
+  id: string; display_name: string; avatar_url: string | null; verified: Verified; bio: string | null; is_public: boolean;
+  interests: Category[]; can_see: boolean; hosted: number; joined: number; followers: number; following: number;
+  my_follow: FollowStatus | null; follows_me: boolean;
+}
+export interface ActivityItem { pulse: Pulse; kind: "hosted" | "joined" }
+export interface FollowingItem { pulse: Pulse; via: PublicProfile & { id: string }; kind: "hosted" | "joined" }
+export interface FollowRequest { follower: string; created_at: string; profile: PublicProfile | null }
 
 export interface Member {
   user_id: string;

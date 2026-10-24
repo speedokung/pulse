@@ -6,8 +6,8 @@ import { accepted, isOver, ms } from "../lib/pulse";
 import { prefs } from "../hooks";
 import { t } from "../lib/i18n";
 
-export function copy(text: string, toast: (s: string) => void) {
-  navigator.clipboard?.writeText(text).then(() => toast(t("tCopied")), () => toast(t("tCopyFail")));
+export function copy(text: string, toast: (s: string) => void, ok?: string) {
+  navigator.clipboard?.writeText(text).then(() => toast(ok ?? t("tCopied")), () => toast(t("tCopyFail")));
 }
 
 export function GrowTab({ pulses, selected, lang, setLang, onShare, onPoster, toast }: {

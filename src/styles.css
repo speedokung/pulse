@@ -433,3 +433,53 @@ html, body { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-siz
 .peek .go { flex: none; padding: 11px 18px; }
 .draftnote { font-family: var(--f-body); font-size: 12px; font-weight: 600; color: var(--muted); background: var(--bg); border-radius: 999px; padding: 3px 9px; margin-left: 8px; vertical-align: middle; }
 .legal { font-size: 12.5px; color: var(--muted); text-align: center; } .legal a { color: var(--muted); }
+
+/* ---------- profiles + follows ---------- */
+.linkbtn { border: none; background: none; padding: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.hostline .linkbtn:hover, .hostline .linkbtn:focus-visible { text-decoration: underline; }
+.req-who { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.whogoing { display: grid; gap: 6px; }
+.faces { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.faces::-webkit-scrollbar { display: none; }
+.face { border: none; background: none; padding: 0; display: grid; justify-items: center; gap: 3px; width: 52px; flex: none; color: inherit; }
+.face span:last-child { font-size: 11.5px; color: var(--muted); max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pview { position: relative; gap: 14px; width: min(480px, 100%); max-height: min(88vh, 100%); }
+.pv-x { position: absolute; right: 12px; top: 12px; }
+.pv-head { display: flex; gap: 14px; align-items: flex-start; padding-right: 36px; }
+.pv-id { display: grid; gap: 4px; min-width: 0; }
+.pv-id h3 { margin: 0; display: flex; align-items: center; gap: 6px; }
+.pv-lock { color: var(--muted); display: inline-grid; }
+.pv-bio { margin: 0; font-size: 14px; color: var(--muted); white-space: pre-wrap; }
+.pv-id .tagchip { justify-self: start; }
+.pv-stats { display: grid; grid-template-columns: repeat(4, 1fr); text-align: center; border: 1px solid var(--line); border-radius: 12px; padding: 8px 4px; }
+.pv-stats div { display: grid; }
+.pv-stats b { font-family: var(--f-display); font-size: 19px; }
+.pv-stats span { font-size: 12px; color: var(--muted); }
+.pv-btns { justify-content: stretch; }
+.pv-btns > * { flex: 1; }
+.ghostbtn.on { border-color: var(--fg); }
+.pv-private { display: flex; gap: 10px; align-items: flex-start; border: 1px dashed var(--line); border-radius: 12px; padding: 14px; color: var(--muted); }
+.pv-private div { display: grid; gap: 2px; }
+.pv-private b { color: var(--fg); }
+.pv-list { display: grid; gap: 2px; }
+.pv-item { display: flex; gap: 10px; align-items: center; border: none; background: none; padding: 8px 4px; border-radius: 10px; text-align: left; color: inherit; width: 100%; }
+.pv-item:hover, .pv-item:focus-visible { background: var(--bg); }
+.pv-glyph { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: #fff; background: var(--ghost); flex: none; }
+.pv-item.past .pv-glyph { color: var(--ghost-ink); }
+.pv-txt { display: grid; min-width: 0; }
+.pv-txt b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-txt span { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-item.past b { color: var(--muted); }
+.pv-mine { justify-self: start; }
+.chip.static { cursor: default; }
+label.f textarea { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font-size: 15px; text-transform: none; letter-spacing: 0; font-weight: 400; width: 100%; resize: vertical; font-family: inherit; }
+.switchrow { display: flex; gap: 12px; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; cursor: pointer; }
+.switchrow span { display: grid; gap: 2px; }
+.switchrow small { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.switchrow input { appearance: none; width: 44px; height: 26px; border-radius: 13px; background: var(--line); position: relative; flex: none; transition: background .15s; cursor: pointer; }
+.switchrow input::after { content: ""; position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.switchrow input:checked { background: var(--accent); }
+.switchrow input:checked::after { transform: translateX(18px); }
+.ffrow { display: grid; gap: 4px; }
+.ffwho { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 6px 2px 0; }
+.ffwho { justify-self: start; }

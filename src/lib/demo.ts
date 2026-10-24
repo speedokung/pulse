@@ -1,6 +1,6 @@
 // Demo mode: example Pulses around central Bangkok, kept in memory on this device.
 // Used automatically when VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are not set.
-import type { ChatMessage, Contact, FeedPost, Level, MemberStatus, NewPulse, Pulse, Signal } from "./types";
+import type { ActivityItem, ChatMessage, Contact, FeedPost, FollowingItem, Level, MemberStatus, NewPulse, ProfileSummary, Pulse, Signal } from "./types";
 import { roughen } from "./geo";
 import { DAY, HOUR, MIN } from "./pulse";
 
@@ -170,3 +170,31 @@ setInterval(() => {
   p.memberships.push(...crowd(1));
   emit();
 }, 15000);
+
+// ---------- profiles + follows (demo) ----------
+const demoFollows = new Set<string>(["h-ใหม่"]); // you already follow ใหม่, so the Following feed has something
+export function demoProfile(id: string): ProfileSummary | null {
+  const all = demoPulses();
+  const mine = all.filter((p) => p.host_id === id);
+  const host = mine[0]?.host;
+  if (id !== DEMO_UID && !host) return null;
+  return {
+    id, display_name: id === DEMO_UID ? "คุณ" : host!.display_name, avatar_url: null, verified: host?.verified ?? null,
+    bio: id === DEMO_UID ? null : "ชวนเล่นแถวลุมพินีเกือบทุกเย็น มือใหม่มาได้",
+    is_public: true, interests: [], can_see: true, hosted: mine.length,
+    joined: all.filter((p) => p.memberships.some((m) => m.user_id === id && m.status === "accepted")).length,
+    followers: 12 + (demoFollows.has(id) ? 1 : 0), following: 8, my_follow: demoFollows.has(id) ? "accepted" : null, follows_me: false,
+  };
+}
+export function demoActivity(id: string): ActivityItem[] {
+  return demoPulses().flatMap((p): ActivityItem[] => {
+    if (p.host_id === id) return [{ pulse: p, kind: "hosted" }];
+    if (p.memberships.some((m) => m.user_id === id && m.status === "accepted")) return [{ pulse: p, kind: "joined" }];
+    return [];
+  }).sort((a, b) => +new Date(b.pulse.starts_at) - +new Date(a.pulse.starts_at));
+}
+export function demoFollow(id: string, on: boolean) { if (on) demoFollows.add(id); else demoFollows.delete(id); emit(); return on ? "accepted" : null; }
+export function demoFollowingFeed(): FollowingItem[] {
+  return demoPulses().filter((p) => demoFollows.has(p.host_id) && +new Date(p.ends_at) > Date.now() - 2 * DAY)
+    .map((p) => ({ pulse: p, kind: "hosted" as const, via: { id: p.host_id, display_name: p.host?.display_name ?? "", verified: p.host?.verified ?? null } }));
+}

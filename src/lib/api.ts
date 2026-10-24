@@ -1,6 +1,6 @@
 import { SUBS, subByKey } from "./categories";
 // One data layer for both modes: Supabase when configured, the in-memory demo otherwise.
-import type { Category, ChatMessage, Contact, FeedPost, LatLng, MemberStatus, NewPulse, PostKind, Pulse, Signal } from "./types";
+import type { ActivityItem, Category, ChatMessage, Contact, FeedPost, FollowingItem, FollowRequest, FollowStatus, LatLng, MemberStatus, NewPulse, PostKind, ProfileSummary, PublicProfile, Pulse, Signal } from "./types";
 import { configured, supabase, PHOTO_BUCKET } from "./supabase";
 import * as demo from "./demo";
 import { getLang } from "./i18n";
@@ -273,3 +273,75 @@ export const errText = (e: unknown) => {
   if (getLang() === "th") return TH_ERRORS.find(([re]) => re.test(msg))?.[1] || "มีบางอย่างผิดพลาด ลองใหม่อีกครั้ง";
   return msg || "Something went wrong. Check your connection and try again.";
 };
+
+// ---------- profiles + follows ----------
+async function pulsesByIds(ids: string[]): Promise<Pulse[]> {
+  const out: Pulse[] = [];
+  for (const part of chunks([...new Set(ids)], 80)) {
+    const { data, error } = await supabase.from("pulses").select(PULSE_SELECT).in("id", part);
+    if (error) throw error;
+    out.push(...((data ?? []) as Pulse[]));
+  }
+  return attachExact(out);
+}
+export async function loadProfile(id: string): Promise<ProfileSummary | null> {
+  if (!configured) return demo.demoProfile(id);
+  const { data, error } = await supabase.rpc("profile_summary", { p_user: id });
+  if (error) throw error;
+  return (data as ProfileSummary) ?? null;
+}
+export async function loadProfileActivity(id: string): Promise<ActivityItem[]> {
+  if (!configured) return demo.demoActivity(id);
+  const { data, error } = await supabase.rpc("profile_activity", { p_user: id });
+  if (error) throw error;
+  const rows = (data ?? []) as { pulse_id: string; kind: ActivityItem["kind"] }[];
+  const byId = new Map((await pulsesByIds(rows.map((r) => r.pulse_id))).map((p) => [p.id, p]));
+  return rows.filter((r) => byId.has(r.pulse_id)).map((r) => ({ pulse: byId.get(r.pulse_id)!, kind: r.kind }));
+}
+export async function followUser(id: string): Promise<FollowStatus> {
+  if (!configured) return demo.demoFollow(id, true) as FollowStatus;
+  const { data, error } = await supabase.rpc("follow_user", { p_user: id });
+  if (error) throw error;
+  return data as FollowStatus;
+}
+export async function unfollowUser(me: string, id: string) {
+  if (!configured) { demo.demoFollow(id, false); return; }
+  const { error } = await supabase.from("follows").delete().eq("follower", me).eq("followee", id);
+  if (error) throw error;
+}
+export async function loadFollowRequests(me: string): Promise<FollowRequest[]> {
+  if (!configured) return [];
+  const { data, error } = await supabase.from("follows")
+    .select("follower, created_at, profile:profiles!follows_follower_fkey(display_name,avatar_url,verified)")
+    .eq("followee", me).eq("status", "requested").order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as unknown as FollowRequest[];
+}
+export async function respondFollow(follower: string, accept: boolean) {
+  if (!configured) return;
+  const { error } = await supabase.rpc("respond_follow", { p_follower: follower, p_accept: accept });
+  if (error) throw error;
+}
+export async function setProfilePublic(isPublic: boolean) {
+  if (!configured) return;
+  const { error } = await supabase.rpc("set_profile_public", { p_public: isPublic });
+  if (error) throw error;
+}
+export async function saveBio(me: string, bio: string) {
+  if (!configured) return;
+  const { error } = await supabase.from("profiles").update({ bio: bio.trim() || null }).eq("id", me);
+  if (error) throw error;
+}
+/** What the people I follow are hosting or joining (recent and upcoming), any distance. */
+export async function loadFollowingFeed(): Promise<FollowingItem[]> {
+  if (!configured) return demo.demoFollowingFeed();
+  const { data, error } = await supabase.rpc("following_pulses");
+  if (error) throw error;
+  const rows = (data ?? []) as { pulse_id: string; via: string; kind: FollowingItem["kind"] }[];
+  if (!rows.length) return [];
+  const byId = new Map((await pulsesByIds(rows.map((r) => r.pulse_id))).map((p) => [p.id, p]));
+  const { data: people } = await supabase.from("profiles").select("id,display_name,avatar_url,verified").in("id", [...new Set(rows.map((r) => r.via))]);
+  const who = new Map(((people ?? []) as (PublicProfile & { id: string })[]).map((x) => [x.id, x]));
+  return rows.filter((r) => byId.has(r.pulse_id))
+    .map((r) => ({ pulse: byId.get(r.pulse_id)!, kind: r.kind, via: who.get(r.via) ?? { id: r.via, display_name: "" } }));
+}

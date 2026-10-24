@@ -14,12 +14,14 @@ import { useAuth } from "./auth";
 import { MapView } from "./components/MapView";
 import { PulseDetail } from "./components/PulseDetail";
 import { NearbyTab, nearbyList } from "./components/NearbyTab";
-import { FeedTab } from "./components/FeedTab";
+import { FeedTab, FollowingFeed } from "./components/FeedTab";
 import { HistoryTab, Period, PERIODS } from "./components/HistoryTab";
 import { GrowTab } from "./components/GrowTab";
 import { ShareModal } from "./components/ShareModal";
 import { DropPrefill, DropPulse, readDraft } from "./components/DropPulse";
 import { ProfileSheet } from "./components/ProfileSheet";
+import { ProfileView } from "./components/ProfileView";
+import { PROFILE_EVENT } from "./lib/profileBus";
 import { Avatar, type Actions } from "./components/ui";
 
 type Tab = "map" | "near" | "feed" | "hist" | "grow";
@@ -54,9 +56,20 @@ export default function App() {
   const [lang, setLangState] = useState<Lang>(getLang);
   const [profileOpen, setProfileOpen] = useState<null | { reason: string | null }>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<string | null>(() => new URLSearchParams(location.search).get("u"));
+  useEffect(() => {
+    const on = (e: Event) => setViewing((e as CustomEvent<string>).detail);
+    window.addEventListener(PROFILE_EVENT, on); return () => window.removeEventListener(PROFILE_EVENT, on);
+  }, []);
+  useEffect(() => { // ?u=<id> opens a shared profile once; clean the address afterwards
+    if (!new URLSearchParams(location.search).get("u")) return;
+    const c = new URL(location.href); c.searchParams.delete("u"); history.replaceState(null, "", c.toString());
+  }, []);
   const [centerOn, setCenterOn] = useState<{ ll: LatLng; k: number } | null>(null);
   const [q, setQ] = useState("");
   const [period, setPeriod] = useState<Period>("week");
+  const [feedMode, setFeedMode] = useState<"near" | "following">(() => prefs.read("feedMode", "near"));
+  const [feedKey, setFeedKey] = useState(0);
   const [hist, setHist] = useState<{ list: Pulse[]; loading: boolean }>({ list: [], loading: false });
 
   const toastT = useRef<ReturnType<typeof setTimeout>>();
@@ -87,15 +100,18 @@ export default function App() {
   const pulses = useMemo(() => data.pulses.filter(byCat), [data.pulses, cats, subF]); // eslint-disable-line react-hooks/exhaustive-deps
   const histList = useMemo(() => hist.list.filter(byCat), [hist.list, cats, subF]); // eslint-disable-line react-hooks/exhaustive-deps
   const near = nearbyList(pulses, loc.me, radiusM, uid);
-  const all = useMemo(() => { const m = new Map<string, Pulse>(); [...data.pulses, ...hist.list].forEach((p) => m.set(p.id, p)); return m; }, [data.pulses, hist.list]);
+  // Pulses opened from a profile or the Following feed can be far away or old, so they're kept here too
+  const [extra, setExtra] = useState<Map<string, Pulse>>(new Map());
+  const all = useMemo(() => { const m = new Map<string, Pulse>(extra); [...data.pulses, ...hist.list].forEach((p) => m.set(p.id, p)); return m; }, [data.pulses, hist.list, extra]);
   const selected = sel ? all.get(sel) ?? null : null;
 
   const mapItems = useMemo(() => {
     const m = new Map<string, Pulse>();
     pulses.forEach((p) => { if (showPast || !isOver(p)) m.set(p.id, p); });
     if (panelTab === "hist") histList.forEach((p) => m.set(p.id, p));
+    if (sel && extra.has(sel) && !m.has(sel)) m.set(sel, extra.get(sel)!);
     return [...m.values()];
-  }, [pulses, histList, panelTab, showPast]);
+  }, [pulses, histList, panelTab, showPast, sel, extra]);
   const surfaced = panelTab === "hist" ? new Set(histList.map((p) => p.id)) : null;
 
   // deep link: ?p=<id>
@@ -294,12 +310,17 @@ export default function App() {
               {(Object.keys(PERIODS) as Period[]).map((k) => <button key={k} aria-pressed={period === k} onClick={() => setPeriod(k)}>{PERIODS[k].label()}</button>)}
             </div>
           )}
-          {(panelTab === "near" || panelTab === "feed") && (
+          {panelTab === "feed" && (
+            <div className="seg" role="group" aria-label={t("tabFeed")}>
+              {(["near", "following"] as const).map((k) => <button key={k} aria-pressed={feedMode === k} onClick={() => { setFeedMode(k); prefs.write("feedMode", k); setFeedKey((n) => n + 1); }}>{k === "near" ? t("feedNear") : t("feedFollowing")}</button>)}
+            </div>
+          )}
+          {(panelTab === "near" || (panelTab === "feed" && feedMode === "near")) && (
             <div className="seg" role="group" aria-label="Distance">
               {(Object.keys(RADII) as RadiusKey[]).map((k) => <button key={k} aria-pressed={radius === k} onClick={() => { setRadius(k); prefs.write("radius", k); }}>{RADII[k].label()}</button>)}
             </div>
           )}
-          {panelTab !== "grow" && (
+          {panelTab !== "grow" && !(panelTab === "feed" && feedMode === "following") && (
             <div className="row">
               <button className="chip" aria-pressed={allCats} onClick={() => { setCats(new Set(CAT_KEYS)); setSubF(null); }}>{t("allCats")}</button>
               {CAT_KEYS.map((k) => (
@@ -309,7 +330,7 @@ export default function App() {
               ))}
             </div>
           )}
-          {panelTab !== "grow" && onlyCat && (
+          {panelTab !== "grow" && onlyCat && !(panelTab === "feed" && feedMode === "following") && (
             <div className="subrow" role="group" aria-label={catName(onlyCat)}>
               {subsOf(onlyCat).map((sb) => (
                 <button key={sb.k} className="chip" aria-pressed={subF === sb.k} onClick={() => setSubF(subF === sb.k ? null : sb.k)}>{lang === "th" ? sb.th : sb.en}</button>
@@ -334,7 +355,11 @@ export default function App() {
           {data.loading && !data.pulses.length ? <div className="empty">{t("loading")}</div> : (
             <>
               {panelTab === "near" && <NearbyTab list={near} uid={uid} me={loc.me} selectedId={sel} a={a} />}
-              {panelTab === "feed" && <FeedTab pulses={pulses} posts={data.posts} uid={uid} me={loc.me} radiusM={radiusM} a={a} />}
+              {panelTab === "feed" && feedMode === "near" && <FeedTab pulses={pulses} posts={data.posts} uid={uid} me={loc.me} radiusM={radiusM} a={a} />}
+              {panelTab === "feed" && feedMode === "following" && (
+                <FollowingFeed uid={uid} me={loc.me} selectedId={sel} a={a} canFollow={!configured || hasName} reloadKey={feedKey + data.pulses.length}
+                  onLoaded={(l) => setExtra((m) => { const n = new Map(m); l.forEach((p) => n.set(p.id, p)); return n; })} />
+              )}
               {panelTab === "hist" && <HistoryTab results={histList} loading={hist.loading} q={q} uid={uid} me={loc.me} selectedId={sel} a={a} />}
               {panelTab === "grow" && <GrowTab pulses={data.pulses} selected={selected} lang={capLang} setLang={setCapLang} onShare={setShare} onPoster={() => setShare("poster")} toast={toast} />}
             </>
@@ -349,7 +374,15 @@ export default function App() {
       </nav>
 
       {share && <ShareModal target={share} lang={capLang} setLang={setCapLang} onClose={() => setShare(null)} toast={toast} />}
-      {profileOpen && <ProfileSheet auth={auth} me={loc.me} reason={profileOpen.reason} onClose={() => setProfileOpen(null)} toast={toast} />}
+      {viewing && (
+        <ProfileView key={viewing} id={viewing} uid={uid} canFollow={!configured || hasName}
+          onNeedName={() => { setViewing(null); setProfileOpen({ reason: t("pvNeedName") }); }}
+          onEdit={() => { setViewing(null); setProfileOpen({ reason: null }); }}
+          onOpenPulse={(p) => { setViewing(null); setExtra((m) => new Map(m).set(p.id, p)); setSel(p.id); setCenterOn({ ll: pos(p), k: Date.now() }); if (window.innerWidth < 820) setTab("map"); }}
+          onClose={() => setViewing(null)} toast={toast} />
+      )}
+      {profileOpen && <ProfileSheet auth={auth} me={loc.me} reason={profileOpen.reason} onClose={() => setProfileOpen(null)} toast={toast}
+        onViewMine={uid ? () => { setProfileOpen(null); setViewing(uid); } : undefined} />}
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
     </div>
   );
