@@ -42,9 +42,9 @@ const fs = require('fs'), path = require('path');
   audio.forEach((a, k) => { aIn.push('-i', a.file); aF.push(`[${k + 2}:a]atrim=0:${a.dur},afade=t=in:d=0.15,afade=t=out:st=${Math.max(0, a.dur - 0.25)}:d=0.25,volume=${a.vol},adelay=${Math.round(a.at * 1000)}|${Math.round(a.at * 1000)}[a${k}]`); });
   const mix = audio.length ? ['-filter_complex', `${aF.join(';')};[1:a]${audio.map((_, k) => `[a${k}]`).join('')}amix=inputs=${audio.length + 1}:normalize=0:duration=first[aout]`, '-map', '0:v', '-map', '[aout]'] : ['-map', '0:v', '-map', '1:a'];
   const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-',
-    '-f', 'lavfi', '-t', String(dur), '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000', ...aIn, ...mix,
+    '-f', 'lavfi', '-t', String(dur), '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100', ...aIn, ...mix,
     '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-movflags', '+faststart',
-    '-c:a', 'aac', '-ar', '48000', '-b:a', '128k', '-t', String(dur), outPath], { stdio: ['pipe', 'inherit', 'inherit'] });
+    '-c:a', 'aac', '-b:a', '128k', '-t', String(dur), outPath], { stdio: ['pipe', 'inherit', 'inherit'] });
   const t0 = Date.now();
   for (let i = 0; i < n; i++) {
     await p.evaluate((t) => window.frame(t), i / fps);

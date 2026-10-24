@@ -1,0 +1,1 @@
+Background music for the Reels: tracks by Kevin MacLeod (incompetech.com), licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Commercial use is allowed; each post must credit the track — queue.py adds the credit line to the caption from credits.json. Files are the first 60 s, re-encoded to 48 kHz.
