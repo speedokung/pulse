@@ -14,7 +14,12 @@
 //   APP_URL                                         plain text, e.g. https://thaew.com
 //   LIFF_ID                                         plain text (optional, makes LINE messages open inside LINE)
 
+import { igTick } from "./instagram";
+
 export interface Env {
+  IG_USER_ID?: string;
+  IG_ACCESS_TOKEN?: string;
+  IG_PAUSED?: string;
   ASSETS: Fetcher;
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
@@ -30,6 +35,10 @@ const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", ...extra } });
 
 export default {
+  // Instagram auto-poster (wrangler.jsonc → triggers.crons)
+  async scheduled(_ev: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(igTick(env).then((l) => console.log("ig:", l.join(" | "))).catch((e) => console.log("ig error:", (e as Error).message)));
+  },
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
     if (url.hostname.startsWith("www.")) { url.hostname = url.hostname.slice(4); return Response.redirect(url.toString(), 301); }
@@ -37,6 +46,11 @@ export default {
       if (url.pathname === "/api/resolve-map") return await resolveMap(url);
       if (url.pathname === "/api/line/link" && req.method === "POST") return await lineLink(req, env);
       if (url.pathname === "/api/notify" && req.method === "POST") return await notify(req, env, ctx);
+      // run the Instagram poster by hand (same secret as the Supabase webhook); ?dry=1 only says what it would do
+      if (url.pathname === "/api/ig/tick" && req.method === "POST") {
+        if (!env.WEBHOOK_SECRET || req.headers.get("x-webhook-secret") !== env.WEBHOOK_SECRET) return json({ error: "forbidden" }, 403);
+        return json({ log: await igTick(env, { dryRun: url.searchParams.get("dry") === "1" }) });
+      }
       if (url.pathname.startsWith("/api/")) return json({ error: "not found" }, 404);
       if (url.pathname === "/") return await withPreview(req, env, url.searchParams.get("p"));
     } catch (e) {

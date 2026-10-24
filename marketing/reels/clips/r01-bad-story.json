@@ -1,0 +1,85 @@
+{
+  "name": "r01-bad-story",
+  "fps": 30,
+  "brand": "แถว",
+  "screens": "screens",
+  "caption": "จองสนามแล้ว เพื่อนเทอีกแล้ว ลองตั้งก๊วนบน thaew.com คนแถวนี้เห็นทันที ไม่ต้องโหลดแอป ไม่ต้องสมัคร (ลิงก์ใน bio)\n\n#แถว #หาเพื่อนเล่น #กรุงเทพ #ตีแบด #แบดมินตัน",
+  "scenes": [
+    {
+      "type": "text",
+      "dur": 3.0,
+      "bg": {
+        "clip": "A1",
+        "from": 2.5
+      },
+      "kicker": "ทุกคนเคยเจอ",
+      "lines": [
+        "จองสนามแล้ว",
+        "เพื่อนเทอีกแล้ว"
+      ],
+      "highlight": [
+        1
+      ]
+    },
+    {
+      "type": "text",
+      "dur": 4.6,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "green": {
+          "clip": "D1",
+          "from": 0.5,
+          "screens": [
+            [
+              0,
+              "screens-tall/01-map.png"
+            ],
+            [
+              2.4,
+              "screens-tall/03-form-sub.png"
+            ]
+          ]
+        }
+      },
+      "caption": "เปิด <b>thaew.com</b> ตั้งก๊วนแบด"
+    },
+    {
+      "type": "text",
+      "dur": 3.4,
+      "enter": "cut",
+      "bg": {
+        "clip": "B1",
+        "from": 0.6
+      },
+      "kicker": "20 นาทีต่อมา",
+      "lines": [
+        "มีคนมาจอย"
+      ],
+      "highlight": [
+        0
+      ]
+    },
+    {
+      "type": "text",
+      "dur": 2.6,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "C1",
+        "from": 4.0
+      },
+      "label": "ครบ 4 คน ตีกันยาวๆ"
+    },
+    {
+      "type": "end",
+      "dur": 3.2,
+      "logo": "assets/logo.png",
+      "title": "เพื่อนเท",
+      "title2": "คนแถวนี้ไม่เท",
+      "url": "thaew.com",
+      "sub": "ไม่ต้องโหลดแอป · ไม่ต้องสมัคร",
+      "stagger": 0.18
+    }
+  ]
+}

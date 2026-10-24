@@ -11,6 +11,21 @@ const fs = require('fs'), path = require('path');
   const tapsFile = path.join(__dirname, spec.screens, 'taps.json');
   if (fs.existsSync(tapsFile)) Object.assign(spec, JSON.parse(fs.readFileSync(tapsFile, 'utf8')));
   const fps = spec.fps || 30;
+  // footage: cut (or key) each scene's clip into a 30 fps frame folder, and remember its audio
+  const { execFileSync } = require('child_process');
+  const audio = []; let at = 0;
+  for (const sc of spec.scenes) {
+    const b = sc.bg || {};
+    if (b.clip || b.green) {
+      const g = b.green;
+      const args = g ? ['green', g.clip, String(g.from), String(sc.dur + 0.1), JSON.stringify(g.screens)] : ['cut', b.clip, String(b.from || 0), String(sc.dur + 0.1)];
+      const dir = execFileSync('python3', [path.join(__dirname, 'prep.py'), ...args]).toString().trim();
+      b.frames = dir; b.count = fs.readdirSync(dir).filter((f) => f.endsWith('.jpg')).length; sc.bg = b;
+      if (b.kenburns === undefined) b.kenburns = 0.04;
+      if (fs.existsSync(path.join(dir, 'audio.wav')) && b.sound !== false) audio.push({ file: path.join(dir, 'audio.wav'), at, dur: sc.dur, vol: b.volume ?? 0.55 });
+    }
+    at += sc.dur;
+  }
   const b = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   const p = await b.newPage({ viewport: { width: 1080, height: 1920 } });
   await p.addInitScript((s) => { window.SPEC = s; }, spec);
@@ -22,10 +37,14 @@ const fs = require('fs'), path = require('path');
     await b.close(); console.log('stills done'); return;
   }
   const n = Math.round(dur * fps);
+  // ambient sound from the footage, each piece placed at its scene's start with short fades
+  const aIn = [], aF = [];
+  audio.forEach((a, k) => { aIn.push('-i', a.file); aF.push(`[${k + 2}:a]atrim=0:${a.dur},afade=t=in:d=0.15,afade=t=out:st=${Math.max(0, a.dur - 0.25)}:d=0.25,volume=${a.vol},adelay=${Math.round(a.at * 1000)}|${Math.round(a.at * 1000)}[a${k}]`); });
+  const mix = audio.length ? ['-filter_complex', `${aF.join(';')};[1:a]${audio.map((_, k) => `[a${k}]`).join('')}amix=inputs=${audio.length + 1}:normalize=0:duration=first[aout]`, '-map', '0:v', '-map', '[aout]'] : ['-map', '0:v', '-map', '1:a'];
   const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-',
-    '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-movflags', '+faststart',
-    '-c:a', 'aac', '-shortest', outPath], { stdio: ['pipe', 'inherit', 'inherit'] });
+    '-f', 'lavfi', '-t', String(dur), '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100', ...aIn, ...mix,
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-movflags', '+faststart',
+    '-c:a', 'aac', '-b:a', '128k', '-t', String(dur), outPath], { stdio: ['pipe', 'inherit', 'inherit'] });
   const t0 = Date.now();
   for (let i = 0; i < n; i++) {
     await p.evaluate((t) => window.frame(t), i / fps);

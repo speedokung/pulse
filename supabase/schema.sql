@@ -551,3 +551,23 @@ grant execute on function public.following_pulses() to authenticated;
 grant execute on function public.can_see_profile(uuid) to anon, authenticated;
 grant execute on function public.profile_summary(uuid) to anon, authenticated;
 grant execute on function public.profile_activity(uuid) to anon, authenticated;
+
+-- ---------- Instagram auto-poster (written only by the Worker with the service key) ----------
+create table if not exists public.ig_posts (
+  id           text primary key,
+  status       text not null check (status in ('processing','published','error')),
+  container_id text,
+  media_id     text,
+  error        text,
+  attempts     int not null default 0,
+  published_at timestamptz,
+  updated_at   timestamptz not null default now()
+);
+create table if not exists public.ig_state (
+  key        text primary key,
+  value      text not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.ig_posts enable row level security;
+alter table public.ig_state enable row level security;
+-- no policies: only the service role (the Worker) can read or write these

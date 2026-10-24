@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>แผนโพสต์ IG · แถว</title>
+<link rel="icon" type="image/png" href="/favicon-32.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600;700&display=swap">
+<style>
+:root { --bg:#f6f8f8; --panel:#fff; --fg:#14211f; --muted:#5d6d6b; --line:#d6dfdf; --accent:#ff5a36; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0d1416; --panel:#141d20; --fg:#e6eeec; --muted:#93a4a1; --line:#25343a; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: Anuphan, system-ui, sans-serif; line-height: 1.55; }
+main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+h1 { font-size: 28px; margin: 8px 0 4px; }
+.sub { color: var(--muted); margin: 0 0 20px; }
+.week { font-weight: 700; color: var(--muted); margin: 28px 0 10px; font-size: 14px; letter-spacing: .02em; }
+.row { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.post { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
+.media { background: #000; aspect-ratio: 4 / 5; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; }
+.media video, .media img { width: 100%; height: 100%; object-fit: contain; flex: none; scroll-snap-align: start; }
+.meta { padding: 12px 14px 14px; display: grid; gap: 6px; }
+.when { font-weight: 700; }
+.type { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--accent); color: #1a0a05; margin-left: 6px; vertical-align: 2px; }
+.type.carousel { background: var(--line); color: var(--fg); }
+.cap { white-space: pre-wrap; color: var(--muted); font-size: 14px; max-height: 7.5em; overflow: auto; }
+.past { opacity: .55; }
+</style>
+</head>
+<body>
+<main>
+  <h1>แผนโพสต์ Instagram</h1>
+  <p class="sub" id="sum">กำลังโหลด…</p>
+  <div id="list"></div>
+</main>
+<script>
+const fmt = new Intl.DateTimeFormat('th-TH', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+fetch('/ig/queue.json').then((r) => r.json()).then(({ posts }) => {
+  const now = Date.now(), upcoming = posts.filter((p) => Date.parse(p.publish_at) > now).length;
+  document.getElementById('sum').textContent = `${posts.length} โพสต์ · รออีก ${upcoming} · ระบบโพสต์ให้อัตโนมัติไม่เกินวันละ 1 โพสต์`;
+  const weeks = new Map();
+  posts.forEach((p) => { const d = new Date(p.publish_at); const monday = new Date(d); monday.setDate(d.getDate() - ((d.getDay() + 6) % 7)); const k = monday.toISOString().slice(0, 10); (weeks.get(k) || weeks.set(k, []).get(k)).push(p); });
+  const list = document.getElementById('list');
+  [...weeks].forEach(([k, ps], i) => {
+    list.insertAdjacentHTML('beforeend', `<div class="week">สัปดาห์ที่ ${i + 1}</div><div class="row">${ps.map((p) => `
+      <article class="post${Date.parse(p.publish_at) < now ? ' past' : ''}">
+        <div class="media">${p.type === 'reel' ? `<video src="/${p.video}" poster="/${p.cover}" controls playsinline preload="none"></video>` : p.images.map((s) => `<img src="/${s}" loading="lazy" alt="">`).join('')}</div>
+        <div class="meta"><div class="when">${fmt.format(new Date(p.publish_at))}<span class="type ${p.type}">${p.type === 'reel' ? 'Reel' : 'Carousel'}</span></div>
+        <div class="cap">${esc(p.caption)}</div></div>
+      </article>`).join('')}</div>`);
+  });
+});
+</script>
+</body>
+</html>

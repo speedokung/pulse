@@ -1,0 +1,90 @@
+{
+  "name": "r04-howto",
+  "fps": 30,
+  "brand": "แถว",
+  "screens": "screens",
+  "caption": "ตั้งก๊วนบนแถวใน 3 ขั้น: เปิด thaew.com → กดตั้งก๊วน → เลือกกิจกรรม แล้วกดเริ่มเลย คนแถวนี้เห็นบนแผนที่ทันที\n\n#แถว #หาเพื่อนเล่น #กรุงเทพ #ตีแบด",
+  "scenes": [
+    {
+      "type": "text",
+      "dur": 2.8,
+      "shade": "light",
+      "bg": {
+        "green": {
+          "clip": "D2",
+          "from": 0.0,
+          "screens": [
+            [
+              0,
+              "screens-tall/01-map.png"
+            ]
+          ]
+        }
+      },
+      "lines": [
+        "ตั้งก๊วน",
+        "ใน 3 ขั้น"
+      ],
+      "highlight": [
+        1
+      ]
+    },
+    {
+      "type": "phone",
+      "dur": 7.4,
+      "enter": "cut",
+      "bg": {
+        "clip": "C1",
+        "from": 4.0,
+        "sound": false
+      },
+      "shade": true,
+      "steps": [
+        {
+          "at": 0,
+          "screen": "01-map.png",
+          "caption": "1 · เปิด <b>thaew.com</b>"
+        },
+        {
+          "at": 1.7,
+          "tap": "fab",
+          "screen": "02-form.png",
+          "caption": "2 · กด <b>ตั้งก๊วน</b>"
+        },
+        {
+          "at": 3.5,
+          "tap": "sub",
+          "screen": "03-form-sub.png",
+          "caption": "3 · เลือก <b>แบดมินตัน</b>"
+        },
+        {
+          "at": 5.3,
+          "tap": "go",
+          "screen": "04-live.png",
+          "caption": "กด <b>เริ่มเลย</b> ขึ้นแผนที่ทันที"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "dur": 3.0,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "B2",
+        "from": 3.6
+      },
+      "label": "แล้วรอคนแถวนี้มาจอย"
+    },
+    {
+      "type": "end",
+      "dur": 3.2,
+      "logo": "assets/logo.png",
+      "title": "ง่ายแค่นี้",
+      "title2": "ลองตั้งก๊วนแรกเลย",
+      "url": "thaew.com",
+      "sub": "ไม่ต้องโหลดแอป · ไม่ต้องสมัคร",
+      "stagger": 0.18
+    }
+  ]
+}

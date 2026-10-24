@@ -1,0 +1,79 @@
+{
+  "name": "r08-weekend",
+  "fps": 30,
+  "brand": "แถว",
+  "screens": "screens",
+  "caption": "เสาร์อาทิตย์นี้ว่างแล้วใช่มั้ย ลองเปิด thaew.com ดูว่าแถวบ้านมีใครชวนเล่นอะไรอยู่ วิ่ง บอล บอร์ดเกม แบด\n\n#แถว #หาเพื่อนเล่น #กรุงเทพ #วันหยุด #เสาร์อาทิตย์",
+  "scenes": [
+    {
+      "type": "text",
+      "dur": 3.0,
+      "bg": {
+        "clip": "D4",
+        "from": 3.0
+      },
+      "pos": "mid",
+      "lines": [
+        "เสาร์อาทิตย์นี้",
+        "ออกไปเล่นกับคนแถวบ้าน"
+      ],
+      "highlight": [
+        1
+      ]
+    },
+    {
+      "type": "text",
+      "dur": 1.8,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "B5",
+        "from": 0.9
+      },
+      "label": "วิ่ง"
+    },
+    {
+      "type": "text",
+      "dur": 1.8,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "B2b",
+        "from": 0.2
+      },
+      "label": "เตะบอล"
+    },
+    {
+      "type": "text",
+      "dur": 1.8,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "B4",
+        "from": 0.5
+      },
+      "label": "บอร์ดเกม"
+    },
+    {
+      "type": "text",
+      "dur": 1.8,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "B2",
+        "from": 3.6
+      },
+      "label": "ตีแบด"
+    },
+    {
+      "type": "end",
+      "dur": 3.2,
+      "logo": "assets/logo.png",
+      "title": "ว่างแล้วใช่มั้ย",
+      "title2": "ไปดูว่าแถวนี้มีอะไร",
+      "url": "thaew.com",
+      "sub": "ไม่ต้องโหลดแอป · ไม่ต้องสมัคร",
+      "stagger": 0.18
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "name": "r05-boardgame",
+  "fps": 30,
+  "brand": "แถว",
+  "screens": "screens",
+  "caption": "บอร์ดเกมต้องมีอย่างน้อย 3 คน ไม่มีเพื่อนว่างก็ชวนคนแถวนี้ ตั้งก๊วนบน thaew.com แล้วรอคนมาจอย\n\n#แถว #หาเพื่อนเล่น #กรุงเทพ #บอร์ดเกม #boardgame",
+  "scenes": [
+    {
+      "type": "text",
+      "dur": 3.0,
+      "bg": {
+        "clip": "A4",
+        "from": 0.0
+      },
+      "lines": [
+        "บอร์ดเกม",
+        "ต้องมีอย่างน้อย 3 คน"
+      ],
+      "highlight": [
+        1
+      ]
+    },
+    {
+      "type": "text",
+      "dur": 3.6,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "green": {
+          "clip": "D2",
+          "from": 0.0,
+          "screens": [
+            [
+              0,
+              "screens-tall/01-map.png"
+            ]
+          ]
+        }
+      },
+      "caption": "ชวนคนแถวนี้บน <b>thaew.com</b>"
+    },
+    {
+      "type": "text",
+      "dur": 3.6,
+      "enter": "cut",
+      "bg": {
+        "clip": "B4",
+        "from": 0.5
+      },
+      "kicker": "คืนนั้น",
+      "lines": [
+        "ได้เพื่อนใหม่ 3 คน"
+      ],
+      "highlight": [
+        0
+      ]
+    },
+    {
+      "type": "text",
+      "dur": 2.6,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "C3",
+        "from": 2.0
+      },
+      "label": "เล่นจนร้านปิด"
+    },
+    {
+      "type": "end",
+      "dur": 3.2,
+      "logo": "assets/logo.png",
+      "title": "เกมสนุก",
+      "title2": "เมื่อมีคนเล่นด้วย",
+      "url": "thaew.com",
+      "sub": "ไม่ต้องโหลดแอป · ไม่ต้องสมัคร",
+      "stagger": 0.18
+    }
+  ]
+}

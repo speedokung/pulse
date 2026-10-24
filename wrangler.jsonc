@@ -23,5 +23,7 @@
     { "pattern": "thaew.com", "custom_domain": true },
     { "pattern": "www.thaew.com", "custom_domain": true }
   ],
+  // Instagram auto-poster: every 20 minutes (one small step per run)
+  "triggers": { "crons": ["*/20 * * * *"] },
   "observability": { "enabled": true }
 }

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: A; src: url(fonts/anuphan-thai-700-normal.woff2); font-weight: 700; unicode-range: U+0E00-0E7F; }
+@font-face { font-family: A; src: url(fonts/anuphan-latin-700-normal.woff2); font-weight: 700; }
+@font-face { font-family: A; src: url(fonts/anuphan-thai-400-normal.woff2); font-weight: 400; unicode-range: U+0E00-0E7F; }
+@font-face { font-family: A; src: url(fonts/anuphan-latin-400-normal.woff2); font-weight: 400; }
+:root { --accent: #ff5a36; --ink: #0d1416; --paper: #f4f1ec; --muted: #5d6d6b; }
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1080px; height: 1350px; overflow: hidden; font-family: A, sans-serif; }
+.slide { position: absolute; inset: 0; display: none; overflow: hidden; }
+.slide.on { display: block; }
+.dark { background: var(--ink); color: #fff; }
+.light { background: var(--paper); color: var(--ink); }
+.orange { background: var(--accent); color: var(--ink); }
+.bgimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(13,20,22,.1) 20%, rgba(13,20,22,.88) 78%); }
+.brand { position: absolute; left: 70px; top: 64px; display: flex; align-items: center; gap: 12px; font-size: 38px; font-weight: 700; }
+.brand i { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 6px rgba(255,90,54,.3); }
+.count { position: absolute; right: 70px; top: 70px; font-size: 30px; font-weight: 700; opacity: .6; }
+.cover h1 { position: absolute; left: 70px; right: 70px; bottom: 210px; font-size: 104px; line-height: 1.12; }
+.cover h1 em { font-style: normal; background: var(--accent); color: var(--ink); padding: 0 18px 6px; border-radius: 14px; }
+.cover p { position: absolute; left: 70px; right: 70px; bottom: 120px; font-size: 40px; opacity: .9; }
+.swipe { position: absolute; right: 70px; bottom: 60px; font-size: 32px; font-weight: 700; display: flex; gap: 10px; align-items: center; }
+.num { position: absolute; left: 70px; top: 170px; font-size: 150px; font-weight: 700; color: var(--accent); line-height: 1; }
+.tip h2 { position: absolute; left: 70px; right: 70px; top: 340px; font-size: 84px; line-height: 1.16; }
+.tip .tipimg { position: absolute; left: 70px; right: 70px; bottom: 70px; height: 440px; width: 940px; object-fit: cover; border-radius: 36px; }
+.tip.withimg .note { display: none; }
+.tip p { position: absolute; left: 70px; right: 70px; top: 610px; font-size: 44px; line-height: 1.5; color: var(--muted); }
+.dark.tip p { color: #b9c6c4; }
+.tip .note { position: absolute; left: 70px; right: 70px; bottom: 90px; font-size: 36px; font-weight: 700; border-left: 10px solid var(--accent); padding: 6px 0 10px 24px; }
+.photo h2 { position: absolute; left: 70px; right: 70px; bottom: 200px; font-size: 82px; line-height: 1.15; }
+.photo p { position: absolute; left: 70px; right: 70px; bottom: 100px; font-size: 40px; opacity: .92; }
+.photo .tag { position: absolute; left: 70px; top: 160px; font-size: 40px; font-weight: 700; background: var(--accent); color: var(--ink); padding: 8px 24px 12px; border-radius: 999px; }
+.screen h2 { position: absolute; left: 70px; right: 70px; top: 170px; font-size: 70px; line-height: 1.18; }
+.screen p { position: absolute; left: 70px; right: 70px; top: 360px; font-size: 40px; line-height: 1.45; color: var(--muted); }
+.screen .shot { position: absolute; left: 50%; top: 540px; width: 470px; margin-left: -235px; border-radius: 48px; border: 14px solid #05090a; box-shadow: 0 30px 70px rgba(0,0,0,.25); height: 1020px; object-fit: cover; object-position: top; }
+.cta .logo { position: absolute; left: 50%; top: 250px; width: 260px; margin-left: -130px; border-radius: 60px; box-shadow: 0 24px 60px rgba(0,0,0,.2); }
+.cta h2 { position: absolute; left: 60px; right: 60px; top: 600px; text-align: center; font-size: 88px; line-height: 1.15; }
+.cta .url { position: absolute; left: 0; right: 0; top: 880px; text-align: center; }
+.cta .url span { display: inline-block; font-size: 70px; font-weight: 700; background: var(--ink); color: #fff; padding: 14px 50px 22px; border-radius: 999px; }
+.cta p { position: absolute; left: 60px; right: 60px; top: 1050px; text-align: center; font-size: 40px; }
+.cta .save { position: absolute; left: 60px; right: 60px; bottom: 70px; text-align: center; font-size: 32px; font-weight: 700; opacity: .75; }
+</style>
+</head>
+<body>
+<div id="deck"></div>
+<script>
+const D = window.DECK, deck = document.getElementById('deck');
+const ARROW = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+D.slides.forEach((s, i) => {
+  const el = document.createElement('div'); deck.appendChild(el);
+  const n = D.slides.length, brand = `<div class="brand"><i></i>แถว</div>`, count = `<div class="count">${i + 1}/${n}</div>`;
+  if (s.type === 'cover') { el.className = 'slide dark cover'; el.innerHTML = `<img class="bgimg" src="${s.image}"><div class="shade"></div>${brand}<h1>${s.title}</h1><p>${s.sub || ''}</p><div class="swipe">ปัดดู ${ARROW}</div>`; }
+  if (s.type === 'tip') { el.className = `slide ${s.theme || 'light'} tip${s.image ? ' withimg' : ''}`; el.innerHTML = `${brand}${count}<div class="num">${s.num}</div><h2>${s.title}</h2><p>${s.body}</p>${s.note ? `<div class="note">${s.note}</div>` : ''}${s.image ? `<img class="tipimg" src="${s.image}">` : ''}`; }
+  if (s.type === 'photo') { el.className = 'slide dark photo'; el.innerHTML = `<img class="bgimg" src="${s.image}"><div class="shade"></div>${brand}${count}${s.tag ? `<div class="tag">${s.tag}</div>` : ''}<h2>${s.title}</h2><p>${s.body || ''}</p>`; }
+  if (s.type === 'screen') { el.className = 'slide light screen'; el.innerHTML = `${brand}${count}<h2>${s.title}</h2><p>${s.body || ''}</p><img class="shot" src="${s.image}">`; }
+  if (s.type === 'cta') { el.className = 'slide orange cta'; el.innerHTML = `<img class="logo" src="assets/logo.png"><h2>${s.title}</h2><div class="url"><span>thaew.com</span></div><p>${s.body || 'ไม่ต้องโหลดแอป · ไม่ต้องสมัคร'}</p><div class="save">กดบันทึกโพสต์นี้ไว้ แล้วแชร์ให้เพื่อนที่ชอบเท</div>`; }
+});
+window.show = (i) => { [...deck.children].forEach((e, k) => e.classList.toggle('on', k === i)); };
+window.ready = Promise.all([document.fonts.ready, ...[...document.images].map((im) => im.complete ? 1 : new Promise((r) => { im.onload = im.onerror = r; }))]);
+window.COUNT = D.slides.length;
+</script>
+</body>
+</html>

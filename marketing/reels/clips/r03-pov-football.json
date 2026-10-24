@@ -1,0 +1,85 @@
+{
+  "name": "r03-pov-football",
+  "fps": 30,
+  "brand": "แถว",
+  "screens": "screens",
+  "caption": "POV: ย้ายมาอยู่กรุงเทพฯ ไม่มีใครเตะบอลด้วย ตั้งก๊วนบน thaew.com ขาดกี่คนก็บอกไว้ คนแถวนั้นเห็นทันที\n\n#แถว #หาเพื่อนเล่น #กรุงเทพ #ฟุตบอล #ฟุตซอล #หาทีมเตะบอล",
+  "scenes": [
+    {
+      "type": "text",
+      "dur": 3.2,
+      "bg": {
+        "clip": "A3",
+        "from": 4.2
+      },
+      "kicker": "POV",
+      "lines": [
+        "ย้ายมากรุงเทพฯ",
+        "ไม่มีใครเตะบอลด้วย"
+      ],
+      "highlight": [
+        1
+      ]
+    },
+    {
+      "type": "text",
+      "dur": 4.4,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "green": {
+          "clip": "D1",
+          "from": 0.5,
+          "screens": [
+            [
+              0,
+              "screens-tall/01-map.png"
+            ],
+            [
+              2.4,
+              "screens-tall-football/03-form-sub.png"
+            ]
+          ]
+        }
+      },
+      "caption": "ตั้งก๊วน <b>ฟุตบอล 7 คน ขาดอีก 3</b>"
+    },
+    {
+      "type": "text",
+      "dur": 3.0,
+      "enter": "cut",
+      "bg": {
+        "clip": "B3a",
+        "from": 1.5
+      },
+      "kicker": "เสาร์นั้น",
+      "lines": [
+        "ได้ทีมมาเตะ"
+      ],
+      "highlight": [
+        0
+      ]
+    },
+    {
+      "type": "text",
+      "dur": 2.2,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "C2",
+        "from": 0.4
+      },
+      "label": "ไม่ต้องรอเพื่อนว่าง"
+    },
+    {
+      "type": "end",
+      "dur": 3.2,
+      "logo": "assets/logo.png",
+      "title": "ไม่มีทีม",
+      "title2": "หาได้แถวบ้าน",
+      "url": "thaew.com",
+      "sub": "ไม่ต้องโหลดแอป · ไม่ต้องสมัคร",
+      "stagger": 0.18
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "name": "r02-montage",
+  "fps": 30,
+  "brand": "แถว",
+  "screens": "screens",
+  "caption": "เย็นนี้ว่างแต่ไม่รู้จะเล่นอะไร? เปิดแผนที่แถวดูว่าใกล้บ้านมีก๊วนอะไรเปิดอยู่ ตีแบด บอล บอร์ดเกม วิ่ง ดนตรี จอยได้เลย\n\n#แถว #หาเพื่อนเล่น #กรุงเทพ #กิจกรรมหลังเลิกงาน",
+  "scenes": [
+    {
+      "type": "text",
+      "dur": 2.4,
+      "bg": {
+        "clip": "D3",
+        "from": 1.0
+      },
+      "pos": "mid",
+      "lines": [
+        "เย็นนี้ว่าง",
+        "แต่ไม่รู้จะเล่นอะไร?"
+      ],
+      "highlight": [
+        1
+      ]
+    },
+    {
+      "type": "text",
+      "dur": 1.4,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "C1",
+        "from": 4.2
+      },
+      "label": "ตีแบด"
+    },
+    {
+      "type": "text",
+      "dur": 1.6,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "C2",
+        "from": 0.6
+      },
+      "label": "เตะบอล"
+    },
+    {
+      "type": "text",
+      "dur": 1.4,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "C3",
+        "from": 1.0
+      },
+      "label": "บอร์ดเกม"
+    },
+    {
+      "type": "text",
+      "dur": 1.4,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "C4",
+        "from": 1.0
+      },
+      "label": "วิ่งชิล"
+    },
+    {
+      "type": "text",
+      "dur": 1.4,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "clip": "C5",
+        "from": 0.5
+      },
+      "label": "แจมดนตรี"
+    },
+    {
+      "type": "text",
+      "dur": 3.6,
+      "enter": "cut",
+      "shade": "light",
+      "bg": {
+        "green": {
+          "clip": "D2",
+          "from": 0.0,
+          "screens": [
+            [
+              0,
+              "screens-tall/01-map.png"
+            ]
+          ]
+        }
+      },
+      "caption": "ดูได้หมดบน<b>แผนที่แถว</b>"
+    },
+    {
+      "type": "end",
+      "dur": 3.2,
+      "logo": "assets/logo.png",
+      "title": "ก๊วนแถวบ้าน",
+      "title2": "มีให้จอยทุกวัน",
+      "url": "thaew.com",
+      "sub": "ไม่ต้องโหลดแอป · ไม่ต้องสมัคร",
+      "stagger": 0.18
+    }
+  ]
+}
