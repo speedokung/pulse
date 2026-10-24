@@ -1,3 +1,4 @@
+import { SUBS, subByKey } from "./categories";
 // One data layer for both modes: Supabase when configured, the in-memory demo otherwise.
 import type { Category, ChatMessage, Contact, FeedPost, LatLng, MemberStatus, NewPulse, PostKind, Pulse, Signal } from "./types";
 import { configured, supabase, PHOTO_BUCKET } from "./supabase";
@@ -58,7 +59,7 @@ export async function searchHistory(center: LatLng, q: string, sinceMs: number |
     return demo.demoPulses().filter((p) =>
       new Date(p.ends_at).getTime() < Date.now() &&
       (sinceMs == null || new Date(p.ends_at).getTime() > Date.now() - sinceMs) &&
-      (!term || `${p.title} ${p.area_name}`.toLowerCase().includes(term)));
+      (!term || `${p.title} ${p.area_name} ${subByKey(p.sub)?.th ?? ""} ${subByKey(p.sub)?.en ?? ""}`.toLowerCase().includes(term)));
   }
   const b = bbox(center, 15);
   let query = supabase.from("pulses").select(PULSE_SELECT)
@@ -67,7 +68,9 @@ export async function searchHistory(center: LatLng, q: string, sinceMs: number |
     .gte("rough_lng", b.minLng).lte("rough_lng", b.maxLng);
   if (sinceMs != null) query = query.gte("ends_at", new Date(Date.now() - sinceMs).toISOString());
   const safe = term.replace(/[%,()*]/g, " ").trim();
-  if (safe) query = query.or(`title.ilike.%${safe}%,area_name.ilike.%${safe}%`);
+  // "แบด" or "badminton" also finds Pulses tagged with that sub-type
+  const subs = safe ? SUBS.filter((x) => x.th.toLowerCase().includes(safe) || x.en.toLowerCase().includes(safe)).map((x) => x.k) : [];
+  if (safe) query = query.or(`title.ilike.%${safe}%,area_name.ilike.%${safe}%${subs.length ? `,sub.in.(${subs.join(",")})` : ""}`);
   const { data, error } = await query.order("ends_at", { ascending: false }).limit(200);
   if (error) throw error;
   return attachExact((data ?? []) as Pulse[]);
@@ -79,7 +82,7 @@ export async function createPulse(np: NewPulse): Promise<string> {
     p_category: np.category, p_title: np.title, p_need: np.need,
     p_starts_at: new Date(Date.now() + np.startInMin * MIN).toISOString(), p_duration_min: np.durationMin,
     p_visibility: np.visibility, p_lat: np.lat, p_lng: np.lng, p_place: np.place, p_area: np.area,
-    p_level: np.level, p_repeat_weeks: np.repeatWeeks,
+    p_level: np.level, p_repeat_weeks: np.repeatWeeks, p_sub: np.sub,
   });
   if (error) throw error;
   const id = data as string;

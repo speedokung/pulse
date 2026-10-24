@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Category, LatLng, Pulse } from "./lib/types";
-import { CAT_KEYS, CATS, catName, RADII, RadiusKey } from "./lib/categories";
+import { CAT_KEYS, CATS, catName, RADII, RadiusKey, subsOf } from "./lib/categories";
 import { configured } from "./lib/supabase";
 import { createPulse, endPulse, extendPulse, hostStats, sendMessage, setContact, setSignal, errText, joinPulse, leavePulse, postToFeed, respondRequest, searchHistory } from "./lib/api";
 import { accepted, DAY, isOver, ms, pos, status } from "./lib/pulse";
@@ -35,6 +35,16 @@ export default function App() {
   const [tab, setTab] = useState<Tab>(() => (window.innerWidth < 820 ? "map" : "near"));
   const [radius, setRadius] = useState<RadiusKey>(() => prefs.read("radius", "walk"));
   const [cats, setCats] = useState<Set<Category>>(new Set(CAT_KEYS));
+  const [subF, setSubF] = useState<string | null>(null);
+  const allCats = cats.size === CAT_KEYS.length;
+  const onlyCat = cats.size === 1 ? [...cats][0] : null;
+  // with everything on, tapping a type shows just that type; after that, taps add or remove
+  const tapCat = (k: Category) => {
+    setSubF(null);
+    if (allCats) { setCats(new Set([k])); return; }
+    const s = new Set(cats); s.has(k) ? s.delete(k) : s.add(k);
+    setCats(s.size ? s : new Set(CAT_KEYS));
+  };
   const [showPast, setShowPast] = useState(true);
   const [sel, setSel] = useState<string | null>(null);
   const [placing, setPlacing] = useState<null | "pin" | "me">(null);
@@ -72,9 +82,9 @@ export default function App() {
     return () => { dead = true; clearTimeout(t); };
   }, [panelTab, q, period, loc.me, data.pulses, toast]);
 
-  const byCat = (p: Pulse) => cats.has(p.category);
-  const pulses = useMemo(() => data.pulses.filter(byCat), [data.pulses, cats]); // eslint-disable-line react-hooks/exhaustive-deps
-  const histList = useMemo(() => hist.list.filter(byCat), [hist.list, cats]); // eslint-disable-line react-hooks/exhaustive-deps
+  const byCat = (p: Pulse) => cats.has(p.category) && (!subF || p.sub === subF);
+  const pulses = useMemo(() => data.pulses.filter(byCat), [data.pulses, cats, subF]); // eslint-disable-line react-hooks/exhaustive-deps
+  const histList = useMemo(() => hist.list.filter(byCat), [hist.list, cats, subF]); // eslint-disable-line react-hooks/exhaustive-deps
   const near = nearbyList(pulses, loc.me, radiusM, uid);
   const all = useMemo(() => { const m = new Map<string, Pulse>(); [...data.pulses, ...hist.list].forEach((p) => m.set(p.id, p)); return m; }, [data.pulses, hist.list]);
   const selected = sel ? all.get(sel) ?? null : null;
@@ -184,7 +194,7 @@ export default function App() {
     again: (p) => {
       const ll = p.exact ? { lat: p.exact.lat, lng: p.exact.lng } : { lat: p.rough_lat, lng: p.rough_lng };
       setSel(null); setTab(window.innerWidth < 820 ? "map" : "near");
-      setDrop({ pin: ll, prefill: { title: p.title, category: p.category, need: p.need, place: p.exact?.place_name ?? "" }, k: Date.now() });
+      setDrop({ pin: ll, prefill: { title: p.title, category: p.category, need: p.need, place: p.exact?.place_name ?? "", sub: p.sub ?? null }, k: Date.now() });
       setCenterOn({ ll, k: Date.now() });
     },
     chat: async (p, body) => { try { await sendMessage(p.id, body); return true; } catch (e) { toast(errText(e)); return false; } },
@@ -197,6 +207,16 @@ export default function App() {
       if (needName(t("whyPost"))) return false;
       return run(() => postToFeed(uid!, p.id, kind, body, file), kind === "checkin" ? t("tCheckedIn") : t("tPosted"));
     },
+  };
+
+  const [locating, setLocating] = useState(false);
+  const locateMe = async () => {
+    if (locating) return;
+    setLocating(true); toast(t("locating"));
+    const r = await loc.locate();
+    setLocating(false);
+    if (r.ok) { setCenterOn({ ll: r.ll, k: Date.now() }); setToastMsg(null); }
+    else toast(r.denied ? t("locDenied") : t("locFail"));
   };
 
   const openDrop = () => { if (needName(t("whyHost"))) return; setSel(null); setDrop({ pin: loc.me, prefill: null, k: Date.now() }); if (window.innerWidth < 820) setTab("map"); };
@@ -232,10 +252,15 @@ export default function App() {
           <span className="me-name">{configured && auth.isGuest && !hasName ? t("signIn") : auth.profile?.display_name || t("you")}</span>
         </button>
           <button className="mapbtn" aria-pressed={showPast} onClick={() => setShowPast(!showPast)}>{t("pastToggle")}</button>
-          {loc.source === "manual"
-            ? <button className="mapbtn" onClick={() => { loc.useGps(); toast(t("usingGps")); }}>{t("useGps")}</button>
-            : <button className="mapbtn" onClick={() => { setPlacing("me"); }}>{t("setMySpot")}</button>}
+          <button className="mapbtn" onClick={() => { setPlacing("me"); }}>{t("setMySpot")}</button>
         </div>
+        {!drop && !placing && (
+          <button className="locbtn" data-state={locating ? "busy" : loc.source === "gps" ? "on" : "off"} aria-label={t("locate")} title={t("locate")} onClick={locateMe}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2.5" fill="currentColor" /><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" />
+            </svg>
+          </button>
+        )}
         {placing && <div className="placehint">{placing === "me" ? t("tapWhereYouAre") : t("tapWhereItIs")} <button onClick={() => setPlacing(null)}>{t("cancel")}</button></div>}
         {selected && !drop && <PulseDetail p={selected} uid={uid} me={loc.me} posts={data.posts} a={a} />}
         {!drop && !placing && <button className="fab" onClick={openDrop}><span className="ring" />{t("fab")}</button>}
@@ -265,10 +290,18 @@ export default function App() {
           )}
           {panelTab !== "grow" && (
             <div className="row">
+              <button className="chip" aria-pressed={allCats} onClick={() => { setCats(new Set(CAT_KEYS)); setSubF(null); }}>{t("allCats")}</button>
               {CAT_KEYS.map((k) => (
-                <button key={k} className="chip" aria-pressed={cats.has(k)} onClick={() => { const s = new Set(cats); s.has(k) ? s.delete(k) : s.add(k); setCats(s); }}>
+                <button key={k} className="chip" aria-pressed={!allCats && cats.has(k)} onClick={() => tapCat(k)}>
                   <i style={{ background: CATS[k].color }} />{catName(k)}
                 </button>
+              ))}
+            </div>
+          )}
+          {panelTab !== "grow" && onlyCat && (
+            <div className="subrow" role="group" aria-label={catName(onlyCat)}>
+              {subsOf(onlyCat).map((sb) => (
+                <button key={sb.k} className="chip" aria-pressed={subF === sb.k} onClick={() => setSubF(subF === sb.k ? null : sb.k)}>{lang === "th" ? sb.th : sb.en}</button>
               ))}
             </div>
           )}
@@ -285,7 +318,7 @@ export default function App() {
               </span>
             </div>
           )}
-          {loc.source === "default" && <div className="banner"><span>{t("locOff")}</span><button onClick={() => setPlacing("me")}>{t("setMySpot")}</button></div>}
+          {loc.source === "default" && <div className="banner"><span>{t("locOff")}</span><span className="btnrow"><button onClick={locateMe}>{t("locate")}</button><button onClick={() => setPlacing("me")}>{t("setMySpot")}</button></span></div>}
           {data.error && <div className="banner">{t("loadFail", { e: data.error })}</div>}
           {data.loading && !data.pulses.length ? <div className="empty">{t("loading")}</div> : (
             <>

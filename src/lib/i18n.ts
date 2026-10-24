@@ -16,6 +16,20 @@ export function setLang(l: Lang) {
 document.documentElement.lang = LANG;
 
 const S = {
+  // simplified form + sub-types + GPS button
+  fSubHint: { th: "เลือกย่อยได้ (ไม่บังคับ) จะช่วยเติมให้", en: "Pick one to fill the form (optional)" },
+  fNeedShort: { th: "ขาดอีก", en: "Need" },
+  fPeople: { th: "คน", en: "more" },
+  fStartLbl: { th: "เริ่ม", en: "Start" },
+  fHowLong: { th: "นาน", en: "For" },
+  fMore: { th: "ตัวเลือกเพิ่มเติม", en: "More options" },
+  fMoreSum: { th: "ระดับ ทำซ้ำ ติดต่อ ใครเห็นจุดนัด", en: "level, repeat, contact, who sees the spot" },
+  fAtMe: { th: "ตรงที่ฉันอยู่", en: "Where I am" },
+  allCats: { th: "ทั้งหมด", en: "All" },
+  locate: { th: "ไปที่ตำแหน่งฉัน", en: "Go to my location" },
+  locating: { th: "กำลังหาตำแหน่ง…", en: "Finding you…" },
+  locDenied: { th: "เปิดสิทธิ์ตำแหน่งให้เบราว์เซอร์ก่อน (ตั้งค่า → ความเป็นส่วนตัว → บริการหาตำแหน่ง)", en: "Allow location for your browser first (Settings → Privacy → Location Services)" },
+  locFail: { th: "หาตำแหน่งไม่ได้ ลองใหม่อีกครั้ง", en: "Couldn't find your location. Try again." },
   // brand + chrome
   brand: { th: "แถว", en: "Thaew" },
   brandTag: { th: "หาเพื่อนเล่นแถวนี้", en: "find people to play with nearby" },

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Category, Level, LatLng, NewPulse, Visibility } from "../lib/types";
 import { resolveMapLink } from "../lib/api";
-import { CATS, catIcon } from "../lib/categories";
+import { CATS, catIcon, subsOf, subByKey, type Sub } from "../lib/categories";
 import { getLang } from "../lib/i18n";
 import { levelLabel } from "./ui";
 import { CAT_KEYS, catName } from "../lib/categories";
@@ -10,19 +10,8 @@ import { areaName, distanceM, parseMapsLink } from "../lib/geo";
 import { searchPlaces, type PlaceHit } from "../lib/places";
 import { dayClock, dist, span } from "../lib/format";
 
-export interface DropPrefill { title?: string; category?: Category; need?: number; place?: string; where?: string }
+export interface DropPrefill { title?: string; category?: Category; need?: number; place?: string; where?: string; sub?: string | null }
 
-/** One tap fills the form; people only adjust what's different. */
-const TEMPLATES: { th: string; en: string; cat: Category; need: number; dur: number; level: Level }[] = [
-  { th: "ตีแบดคู่ ขาด 2 คน", en: "Doubles badminton, need 2", cat: "sport", need: 2, dur: 120, level: "casual" },
-  { th: "ฟุตบอล 7 คน ขาดอีก 3", en: "7-a-side football, need 3", cat: "sport", need: 3, dur: 90, level: "casual" },
-  { th: "พิกเกิลบอล หาคู่ตี", en: "Pickleball, looking for a partner", cat: "sport", need: 1, dur: 90, level: "any" },
-  { th: "วิ่งชิล 5 กม.", en: "Easy 5 km run", cat: "outdoor", need: 4, dur: 60, level: "beginner" },
-  { th: "บอร์ดเกมคืนนี้", en: "Board games tonight", cat: "games", need: 3, dur: 180, level: "beginner" },
-  { th: "แจมดนตรี ใครเล่นอะไรมาได้", en: "Music jam, bring anything", cat: "music", need: 4, dur: 120, level: "any" },
-  { th: "ปั่นจักรยานรอบสวน", en: "Bike ride around the park", cat: "outdoor", need: 4, dur: 90, level: "casual" },
-  { th: "นั่งสเก็ตช์ภาพด้วยกัน", en: "Sketch together", cat: "make", need: 4, dur: 120, level: "any" },
-];
 const LEVELS: Level[] = ["any", "beginner", "casual", "serious"];
 const REPEATS: [Key, number][] = [["rpOnce", 1], ["rp4", 4], ["rp8", 8]];
 
@@ -49,6 +38,7 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
   const [need, setNeed] = useState(prefill?.need ?? 2);
   const [vis, setVis] = useState<Visibility>("all");
   const [level, setLevel] = useState<Level>("any");
+  const [sub, setSub] = useState<string | null>(prefill?.sub ?? null);
   const [repeat, setRepeat] = useState(1);
   // contact is remembered on this device for next time
   const [lineId, setLineId] = useState(() => { try { return localStorage.getItem("pulse.lineId") || ""; } catch { return ""; } });
@@ -121,10 +111,19 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
   const [customStart, setCustomStart] = useState(() => toLocalInput(new Date(roundUp15(Date.now() + 60 * MIN))));
   const [durPreset, setDurPreset] = useState<number | "until">(60);
   const [until, setUntil] = useState("");
-  const applyTemplate = (tp: (typeof TEMPLATES)[number]) => {
-    setTitle(getLang() === "th" ? tp.th : tp.en); setCategory(tp.cat); setNeed(tp.need); setLevel(tp.level);
-    if (DUR_CHIPS.includes(tp.dur)) setDurPreset(tp.dur); else setDurPreset(60);
+  // a sub-type fills in a suggested title, people and length, unless the person already typed their own title
+  const autoTitle = useRef<string>("");
+  const pickSub = (sb: Sub) => {
+    if (sub === sb.k) { setSub(null); return; }
+    setSub(sb.k);
+    const suggestion = getLang() === "th" ? sb.titleTh : sb.titleEn;
+    if (!title.trim() || title === autoTitle.current) {
+      setTitle(suggestion); autoTitle.current = suggestion;
+      setNeed(sb.need); setLevel(sb.level);
+      setDurPreset(DUR_CHIPS.includes(sb.dur) ? sb.dur : 60);
+    }
   };
+  const pickCat = (c: Category) => { if (c === category) return; setCategory(c); if (subByKey(sub)?.cat !== c) setSub(null); };
   const startAt = useMemo(() => (startPreset === "custom" ? new Date(customStart).getTime() || Date.now() : Date.now() + startPreset * MIN), [startPreset, customStart]);
   const durMin = useMemo(() => {
     if (durPreset !== "until") return durPreset;
@@ -148,44 +147,53 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
     const ok = await onSubmit({
       category, title: title.trim(), need, startInMin: Math.max(0, Math.round((startAt - Date.now()) / MIN)), durationMin: durMin,
       visibility: vis, lat: pin.lat, lng: pin.lng, place: place.trim(), area: area === "…" ? "Nearby" : area,
-      level, repeatWeeks: repeat,
+      level, repeatWeeks: repeat, sub,
       contact: { line_id: lineId.trim().replace(/^@?/, "") || null, phone: phone.trim() || null, landmark: landmark.trim() || null },
     });
     setBusy(false);
     if (!ok) titleRef.current?.focus();
   };
 
+  const moreSummary = [
+    level !== "any" ? levelLabel(level) : null,
+    repeat > 1 ? t(REPEATS.find(([, v]) => v === repeat)![0]) : null,
+    lineId.trim() || phone.trim() ? (lineId.trim() ? `LINE ${lineId.trim()}` : phone.trim()) : null,
+    vis === "accepted" ? t("fAcceptOnly") : null,
+  ].filter(Boolean).join(" · ");
+
   return (
-    <form className="sheet" onSubmit={submit} hidden={hidden}>
-      <h2>{prefill ? t("dropAgain") : t("dropTitle")}</h2>
-      {!prefill && (
-        <div className="templates" role="group" aria-label={t("fQuick")}>
-          {TEMPLATES.map((tp) => (
-            <button type="button" key={tp.en} className="tpl" onClick={() => applyTemplate(tp)} style={{ ["--c" as string]: CATS[tp.cat].color }}>
-              <span dangerouslySetInnerHTML={{ __html: catIcon(tp.cat, 16) }} />{getLang() === "th" ? tp.th : tp.en}
+    <form className="sheet drop" onSubmit={submit} hidden={hidden}>
+      <div className="drop-h">
+        <h2>{prefill ? t("dropAgain") : t("dropTitle")}</h2>
+        <button type="button" className="xbtn" onClick={onCancel} aria-label={t("close")}>×</button>
+      </div>
+
+      <section className="dsec">
+        <div className="cats" role="radiogroup" aria-label={t("fType")}>
+          {CAT_KEYS.map((k) => (
+            <button type="button" key={k} role="radio" aria-checked={category === k} className="cattile" style={{ ["--c" as string]: CATS[k].color }} onClick={() => pickCat(k)}>
+              <span dangerouslySetInnerHTML={{ __html: catIcon(k, 20) }} />{catName(k)}
             </button>
           ))}
         </div>
-      )}
-      <label className="f" htmlFor="f-title">{t("fWhat")}
-        <input ref={titleRef} type="text" id="f-title" maxLength={80} required minLength={3} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("fWhatPh")} />
-      </label>
-      <div className="grid2">
-        <label className="f" htmlFor="f-cat">{t("fType")}
-          <select id="f-cat" value={category} onChange={(e) => setCategory(e.target.value as Category)}>{CAT_KEYS.map((k) => <option key={k} value={k}>{catName(k)}</option>)}</select>
-        </label>
-        <label className="f" htmlFor="f-need">{t("fNeed")}
-          <select id="f-need" value={need} onChange={(e) => setNeed(+e.target.value)}>{Array.from({ length: 20 }, (_, i) => i + 1).map((n) => <option key={n}>{n}</option>)}</select>
-        </label>
-      </div>
+        <div className="scrollrow" role="group" aria-label={t("fSubHint")}>
+          {subsOf(category).map((sb) => (
+            <button type="button" key={sb.k} className="chip" aria-pressed={sub === sb.k} onClick={() => pickSub(sb)}>{getLang() === "th" ? sb.th : sb.en}</button>
+          ))}
+        </div>
+        <input ref={titleRef} type="text" id="f-title" className="titlein" maxLength={80} required minLength={3} value={title}
+          onChange={(e) => setTitle(e.target.value)} placeholder={t("fWhatPh")} aria-label={t("fWhat")} />
+        <div className="stepper" role="group" aria-label={t("fNeed")}>
+          <span>{t("fNeedShort")}</span>
+          <button type="button" onClick={() => setNeed(Math.max(1, need - 1))} aria-label="−" disabled={need <= 1}>−</button>
+          <b aria-live="polite">{need}</b>
+          <button type="button" onClick={() => setNeed(Math.min(30, need + 1))} aria-label="+" disabled={need >= 30}>+</button>
+          <span>{t("fPeople")}</span>
+        </div>
+      </section>
 
-      <div className="row" role="group" aria-label={t("fLevel")}>
-        <span className="f-label">{t("fLevel")}</span>
-        {LEVELS.map((l) => <button type="button" key={l} className="chip" aria-pressed={level === l} onClick={() => setLevel(l)}>{levelLabel(l)}</button>)}
-      </div>
-
-      <fieldset className="group">
-        <legend>{t("fWhere")}</legend>
+      <section className="dsec">
+        <h3>{t("fWhere")}</h3>
         <div className="searchbox">
           <input type="search" id="f-where" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off"
             placeholder={t("fWherePh")} aria-label={t("fWherePh")} />
@@ -204,70 +212,63 @@ export function DropPulse({ pin, me, prefill, hidden, onMovePin, onPin, onCancel
           )}
         </div>
         {whereMsg && <div className="where" role="status">{whereMsg}</div>}
-        <div className="row">
-          <button type="button" className="mini" onClick={() => { onPin(me); setWhereMsg(t("fPinnedAtYou")); }}>{t("fUseLoc")}</button>
+        <div className="pair">
+          <button type="button" className="mini" onClick={() => { onPin(me); setWhereMsg(t("fPinnedAtYou")); }}>{t("fAtMe")}</button>
           <button type="button" className="mini" onClick={onMovePin}>{t("fPickMap")}</button>
         </div>
-        <label className="f" htmlFor="f-place">{t("fSpotName")}
-          <input type="text" id="f-place" maxLength={60} value={place} onChange={(e) => setPlace(e.target.value)} placeholder={t("fSpotPh")} />
-        </label>
-        <div className="where">{d < 40 ? t("fAtYou") : t("fFromYou", { d: dist(d) })} · {t("around", { a: area })} · {t("fDragHint")}</div>
-      </fieldset>
+        <input type="text" id="f-place" maxLength={60} value={place} onChange={(e) => setPlace(e.target.value)} placeholder={t("fSpotPh")} aria-label={t("fSpotName")} />
+        <div className="where">{d < 40 ? t("fAtYou") : t("fFromYou", { d: dist(d) })} · {t("around", { a: area })}</div>
+      </section>
 
-      <fieldset className="group">
-        <legend>{t("fWhen")}</legend>
-        <div className="row" role="group" aria-label="Start">
-          {START_CHIPS.map(([l, v]) => <button type="button" key={l} className="chip" aria-pressed={startPreset === v} onClick={() => setStartPreset(v)}>{t(l)}</button>)}
-          <button type="button" className="chip" aria-pressed={startPreset === "custom"} onClick={() => setStartPreset("custom")}>{t("fPickTime")}</button>
+      <section className="dsec">
+        <h3>{t("fWhen")}</h3>
+        <div className="lblrow"><span>{t("fStartLbl")}</span>
+          <div className="scrollrow" role="group" aria-label={t("fStartLbl")}>
+            {START_CHIPS.map(([l, v]) => <button type="button" key={l} className="chip" aria-pressed={startPreset === v} onClick={() => setStartPreset(v)}>{t(l)}</button>)}
+            <button type="button" className="chip" aria-pressed={startPreset === "custom"} onClick={() => setStartPreset("custom")}>{t("fPickTime")}</button>
+          </div>
         </div>
         {startPreset === "custom" && (
-          <label className="f" htmlFor="f-start">{t("fStarts")}
-            <input type="datetime-local" id="f-start" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
-              min={toLocalInput(new Date())} max={toLocalInput(new Date(Date.now() + MAX_AHEAD_DAYS * 86_400_000))} />
-          </label>
+          <input type="datetime-local" id="f-start" value={customStart} onChange={(e) => setCustomStart(e.target.value)} aria-label={t("fStarts")}
+            min={toLocalInput(new Date())} max={toLocalInput(new Date(Date.now() + MAX_AHEAD_DAYS * 86_400_000))} />
         )}
-        <div className="row" role="group" aria-label="How long">
-          {DUR_CHIPS.map((v) => <button type="button" key={v} className="chip" aria-pressed={durPreset === v} onClick={() => setDurPreset(v)}>{span(v)}</button>)}
-          <button type="button" className="chip" aria-pressed={durPreset === "until"} onClick={() => setDurPreset("until")}>{t("fUntil")}</button>
+        <div className="lblrow"><span>{t("fHowLong")}</span>
+          <div className="scrollrow" role="group" aria-label={t("fHowLong")}>
+            {DUR_CHIPS.map((v) => <button type="button" key={v} className="chip" aria-pressed={durPreset === v} onClick={() => setDurPreset(v)}>{span(v)}</button>)}
+            <button type="button" className="chip" aria-pressed={durPreset === "until"} onClick={() => setDurPreset("until")}>{t("fUntil")}</button>
+          </div>
         </div>
         {durPreset === "until" && (
-          <label className="f" htmlFor="f-until">{t("fEndsAt")}
-            <input type="time" id="f-until" value={until} onChange={(e) => setUntil(e.target.value)} />
-          </label>
+          <input type="time" id="f-until" value={until} onChange={(e) => setUntil(e.target.value)} aria-label={t("fEndsAt")} />
         )}
-        <div className="row" role="group" aria-label={t("fRepeat")}>
-          <span className="f-label">{t("fRepeat")}</span>
-          {REPEATS.map(([k, v]) => <button type="button" key={k} className="chip" aria-pressed={repeat === v} onClick={() => setRepeat(v)}>{t(k)}</button>)}
-        </div>
         <div className={`where${timeError ? " err" : ""}`} role="status">
           {timeError ?? t("fWhenSummary", { s: startPreset === 0 ? t("fStartsNow") : t("startsAt", { t: dayClock(startAt) }), e: dayClock(startAt + durMin * MIN), d: span(durMin) })}
         </div>
-      </fieldset>
+      </section>
 
-      <fieldset className="group">
-        <legend>{t("fContact")}</legend>
-        <div className="sub">{t("fContactWhy")}</div>
-        <div className="grid2">
-          <label className="f" htmlFor="f-line">{t("fLine")}
-            <input type="text" id="f-line" maxLength={40} autoCapitalize="off" autoCorrect="off" value={lineId} onChange={(e) => setLineId(e.target.value)} placeholder={t("fLinePh")} />
-          </label>
-          <label className="f" htmlFor="f-phone">{t("fPhone")}
-            <input type="tel" id="f-phone" maxLength={20} inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("fPhonePh")} />
-          </label>
+      <details className="dsec more">
+        <summary><b>{t("fMore")}</b><span>{moreSummary || t("fMoreSum")}</span></summary>
+        <div className="lblrow"><span>{t("fLevel")}</span>
+          <div className="scrollrow">{LEVELS.map((l) => <button type="button" key={l} className="chip" aria-pressed={level === l} onClick={() => setLevel(l)}>{levelLabel(l)}</button>)}</div>
         </div>
-        <label className="f" htmlFor="f-landmark">{t("fLandmark")}
-          <input type="text" id="f-landmark" maxLength={120} value={landmark} onChange={(e) => setLandmark(e.target.value)} placeholder={t("fLandmarkPh")} />
-        </label>
-      </fieldset>
+        <div className="lblrow"><span>{t("fRepeat")}</span>
+          <div className="scrollrow">{REPEATS.map(([k, v]) => <button type="button" key={k} className="chip" aria-pressed={repeat === v} onClick={() => setRepeat(v)}>{t(k)}</button>)}</div>
+        </div>
+        <div className="f-label">{t("fContact")} <span className="sub">{t("fContactWhy")}</span></div>
+        <div className="grid2">
+          <input type="text" id="f-line" maxLength={40} autoCapitalize="off" autoCorrect="off" value={lineId} onChange={(e) => setLineId(e.target.value)} placeholder={t("fLine")} aria-label={t("fLine")} />
+          <input type="tel" id="f-phone" maxLength={20} inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("fPhone")} aria-label={t("fPhone")} />
+        </div>
+        <input type="text" id="f-landmark" maxLength={120} value={landmark} onChange={(e) => setLandmark(e.target.value)} placeholder={t("fLandmarkPh")} aria-label={t("fLandmark")} />
+        <div className="f-label">{t("fWho")}</div>
+        <div className="seg wide" role="radiogroup" aria-label={t("fWho")}>
+          <button type="button" role="radio" aria-checked={vis === "all"} aria-pressed={vis === "all"} onClick={() => setVis("all")}>{t("fEveryone")}</button>
+          <button type="button" role="radio" aria-checked={vis === "accepted"} aria-pressed={vis === "accepted"} onClick={() => setVis("accepted")}>{t("fAcceptOnly")}</button>
+        </div>
+        <div className="where">{vis === "all" ? t("fEveryoneSub") : t("fAcceptOnlySub")}</div>
+      </details>
 
-      <fieldset className="vis">
-        <legend>{t("fWho")}</legend>
-        <label className="opt" htmlFor="f-vis-all"><input type="radio" id="f-vis-all" name="vis" checked={vis === "all"} onChange={() => setVis("all")} />
-          <span>{t("fEveryone")}<small>{t("fEveryoneSub")}</small></span></label>
-        <label className="opt" htmlFor="f-vis-acc"><input type="radio" id="f-vis-acc" name="vis" checked={vis === "accepted"} onChange={() => setVis("accepted")} />
-          <span>{t("fAcceptOnly")}<small>{t("fAcceptOnlySub")}</small></span></label>
-      </fieldset>
-      <div className="btns">
+      <div className="btns sticky">
         <button type="button" className="ghostbtn" onClick={onCancel}>{t("cancel")}</button>
         <button type="submit" className="go" disabled={busy || !!timeError}>{busy ? t("posting") : startPreset === 0 ? t("fGoLive") : t("fPost")}</button>
       </div>

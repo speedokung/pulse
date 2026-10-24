@@ -356,3 +356,65 @@ html:lang(th) .pm-label { font-family: var(--f-thai); font-size: 13px; }
   .brand { padding: 6px 10px 6px 8px; gap: 8px; }
   .brand b { font-size: 19px; }
 }
+
+/* ---------- simplified drop form ---------- */
+.sheet.drop { gap: 0; padding-bottom: 0; }
+.drop-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 6px; }
+.xbtn { border: none; background: var(--bg); width: 34px; height: 34px; border-radius: 50%; font-size: 22px; line-height: 1; color: var(--muted); flex: none; }
+.dsec { display: grid; gap: 10px; padding: 14px 0; border-top: 1px solid var(--line); min-width: 0; }
+.drop-h + .dsec { border-top: none; padding-top: 4px; }
+.dsec h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--muted); }
+.dsec input[type="text"], .dsec input[type="tel"], .dsec input[type="datetime-local"], .dsec input[type="time"] {
+  width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); font-size: 16px; min-height: 46px; }
+.dsec .titlein { font-size: 17px; font-weight: 600; }
+.cats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.cattile { border: 1.5px solid var(--line); background: none; border-radius: 14px; padding: 9px 2px 7px; display: grid; justify-items: center; gap: 4px;
+  font-size: 12.5px; font-weight: 600; color: var(--muted); min-height: 62px; }
+.cattile span { color: var(--c); display: grid; }
+.cattile[aria-checked="true"] { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--fg); }
+.scrollrow { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 1px; margin: -1px; min-width: 0; }
+.scrollrow::-webkit-scrollbar { display: none; }
+.scrollrow .chip { flex: none; white-space: nowrap; padding: 8px 13px; font-size: 14px; }
+.stepper { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.stepper button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); font-size: 20px; line-height: 1; }
+.stepper button:disabled { opacity: .4; }
+.stepper b { min-width: 28px; text-align: center; font-size: 20px; font-family: var(--f-display); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pair .mini { justify-content: center; padding: 10px; font-size: 14px; }
+.lblrow { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 6px; }
+.lblrow > span { font-size: 13px; font-weight: 600; color: var(--muted); }
+.more summary { list-style: none; cursor: pointer; display: grid; gap: 2px; padding-right: 26px; position: relative; }
+.more summary::-webkit-details-marker { display: none; }
+.more summary::after { content: "›"; position: absolute; right: 6px; top: 50%; transform: translateY(-50%) rotate(90deg); font-size: 22px; color: var(--muted); transition: transform .15s; }
+.more[open] summary::after { transform: translateY(-50%) rotate(-90deg); }
+.more summary b { font-size: 15px; }
+.more summary span { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.more[open] { gap: 12px; }
+.seg.wide { width: 100%; }
+.seg.wide button { flex: 1; padding: 9px 8px; font-size: 14px; }
+.btns.sticky { position: sticky; bottom: 0; background: var(--panel); margin: 0 calc(-1 * max(18px, env(safe-area-inset-left))); border-top: 1px solid var(--line);
+  padding: 10px max(18px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom) + var(--tabbar)) max(18px, env(safe-area-inset-left)); }
+.btns.sticky .go { flex: 1; padding: 13px 18px; font-size: 16px; }
+.btns.sticky .ghostbtn { padding: 13px 16px; }
+@media (min-width: 820px) { .btns.sticky .go { flex: none; min-width: 160px; } }
+
+/* sub-type filter under the category chips */
+.subrow { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.subrow::-webkit-scrollbar { display: none; }
+.subrow .chip { flex: none; white-space: nowrap; font-size: 12.5px; padding: 4px 10px; }
+
+/* GPS button on the map */
+.locbtn { position: absolute; z-index: 4; right: max(14px, env(safe-area-inset-right)); bottom: calc(120px + env(safe-area-inset-bottom) + var(--tabbar));
+  width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--you); box-shadow: var(--shadow);
+  display: grid; place-items: center; }
+.locbtn[data-state="busy"] svg { animation: spin 1.2s linear infinite; }
+.locbtn[data-state="on"] { background: var(--you); color: #fff; border-color: var(--you); }
+
+/* ---------- stop the page from zooming on phones ----------
+   iOS zooms the whole page into any text box under 16px and doesn't zoom back out.
+   The map handles its own pinch, so the page itself never needs to zoom. */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: 16px !important; }
+}
+html, body { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.maplibregl-canvas { touch-action: none; }

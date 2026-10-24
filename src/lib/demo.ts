@@ -18,12 +18,12 @@ const crowd = (k: number, status: MemberStatus = "accepted") =>
 function P(o: {
   id: string; category: Pulse["category"]; title: string; place: string; area: string; host: string;
   lat: number; lng: number; start: number; dur: number; need: number; joined?: number; visibility?: Pulse["visibility"]; created?: number;
-  level?: Level; series?: string; verified?: "google" | "line"; interested?: number; omw?: number[];
+  level?: Level; series?: string; verified?: "google" | "line"; interested?: number; omw?: number[]; sub?: string;
 }): Pulse {
   const vis = o.visibility ?? "all";
   return {
     id: o.id, host_id: "h-" + o.host, host: { display_name: o.host, verified: o.verified ?? null }, category: o.category, title: o.title, need: o.need,
-    level: o.level ?? "any", series_id: o.series ?? null,
+    level: o.level ?? "any", series_id: o.series ?? null, sub: o.sub ?? null,
     pulse_signals: [
       ...Array.from({ length: o.interested ?? 0 }, (_, i): Signal => ({ user_id: `int-${o.id}-${i}`, kind: "interested", eta_min: null, updated_at: iso(T - 20 * MIN) })),
       ...(o.omw ?? []).map((eta, i): Signal => ({ user_id: `ex${i}`, kind: "omw", eta_min: eta, updated_at: iso(T - 2 * MIN) })),
@@ -41,23 +41,23 @@ const hidden: Record<string, { lat: number; lng: number; place_name: string }> =
 };
 
 let pulses: Pulse[] = [
-  P({ id: "ex-pickle", category: "sport", title: "ขาด 2 คน พิกเกิลบอลคู่", place: "คอร์ต 3 สนามสวนลุมพินี", area: "ลุมพินี", host: "ใหม่", verified: "google", level: "casual", interested: 3, lat: 13.7298, lng: 100.5395, start: T - 15 * MIN, dur: 75, need: 2, created: T - 20 * MIN }),
-  P({ id: "ex-jam", category: "music", title: "เล่นกีตาร์โปร่งริมน้ำ มานั่งฟังได้", place: "สนามหญ้าริมน้ำ สวนลุมพินี", area: "ลุมพินี", host: "ต้น", verified: "line", level: "any", omw: [5, 12], interested: 2, lat: 13.7316, lng: 100.5424, start: T - 30 * MIN, dur: 90, need: 4, joined: 2 }),
-  P({ id: "ex-catan", category: "games", title: "Catan ขาด 1 ที่", place: "", area: "สามย่าน", host: "บี", lat: 13.7337, lng: 100.5287, start: T + 25 * MIN, dur: 120, need: 1, visibility: "accepted" }),
-  P({ id: "ex-run", category: "outdoor", title: "วิ่งชิลตอนเย็น 5 กม.", place: "สวนป่าเบญจกิติ ทางขึ้นสกายวอล์ก", area: "เบญจกิติ", host: "แนท", verified: "google", level: "beginner", interested: 4, series: "run-weekly", lat: 13.7296, lng: 100.5594, start: T + 55 * MIN, dur: 45, need: 5, joined: 2 }),
-  P({ id: "ex-hoops", category: "sport", title: "บาส 3 ต่อ 3 ครึ่งสนาม", place: "สนามบาส สนามกีฬาจุฬาฯ", area: "ปทุมวัน", host: "เจ", level: "serious", lat: 13.7389, lng: 100.5266, start: T + 10 * MIN, dur: 60, need: 3, joined: 1 }),
-  P({ id: "ex-futsal", category: "sport", title: "ฟุตซอล 5 คน ขาด 3", place: "สนามฟุตซอลสยาม คอร์ต B", area: "สยาม", host: "อาร์ม", lat: 13.7466, lng: 100.5318, start: T + 130 * MIN, dur: 60, need: 3 }),
-  P({ id: "ex-boardnight", category: "games", title: "บอร์ดเกมไนท์ มือใหม่ก็มาได้", place: "ร้านบอร์ดเกม สามย่านมิตรทาวน์ ชั้น 2", area: "สามย่าน", host: "บี", level: "beginner", series: "bg-weekly", lat: 13.7337, lng: 100.5287, start: new Date(new Date(T + DAY).setHours(19, 0, 0, 0)).getTime(), dur: 180, need: 6, joined: 2 }),
-  P({ id: "ex-sketch", category: "make", title: "สเก็ตช์ภาพปากคลองตลาด ทุกระดับ", place: "", area: "ปากคลองตลาด", host: "พลอย", lat: 13.7436, lng: 100.5003, start: T + 90 * MIN, dur: 90, need: 6, joined: 3, visibility: "accepted" }),
+  P({ id: "ex-pickle", sub: "pickleball", category: "sport", title: "ขาด 2 คน พิกเกิลบอลคู่", place: "คอร์ต 3 สนามสวนลุมพินี", area: "ลุมพินี", host: "ใหม่", verified: "google", level: "casual", interested: 3, lat: 13.7298, lng: 100.5395, start: T - 15 * MIN, dur: 75, need: 2, created: T - 20 * MIN }),
+  P({ id: "ex-jam", sub: "acoustic", category: "music", title: "เล่นกีตาร์โปร่งริมน้ำ มานั่งฟังได้", place: "สนามหญ้าริมน้ำ สวนลุมพินี", area: "ลุมพินี", host: "ต้น", verified: "line", level: "any", omw: [5, 12], interested: 2, lat: 13.7316, lng: 100.5424, start: T - 30 * MIN, dur: 90, need: 4, joined: 2 }),
+  P({ id: "ex-catan", sub: "boardgame", category: "games", title: "Catan ขาด 1 ที่", place: "", area: "สามย่าน", host: "บี", lat: 13.7337, lng: 100.5287, start: T + 25 * MIN, dur: 120, need: 1, visibility: "accepted" }),
+  P({ id: "ex-run", sub: "run", category: "outdoor", title: "วิ่งชิลตอนเย็น 5 กม.", place: "สวนป่าเบญจกิติ ทางขึ้นสกายวอล์ก", area: "เบญจกิติ", host: "แนท", verified: "google", level: "beginner", interested: 4, series: "run-weekly", lat: 13.7296, lng: 100.5594, start: T + 55 * MIN, dur: 45, need: 5, joined: 2 }),
+  P({ id: "ex-hoops", sub: "basketball", category: "sport", title: "บาส 3 ต่อ 3 ครึ่งสนาม", place: "สนามบาส สนามกีฬาจุฬาฯ", area: "ปทุมวัน", host: "เจ", level: "serious", lat: 13.7389, lng: 100.5266, start: T + 10 * MIN, dur: 60, need: 3, joined: 1 }),
+  P({ id: "ex-futsal", sub: "football", category: "sport", title: "ฟุตซอล 5 คน ขาด 3", place: "สนามฟุตซอลสยาม คอร์ต B", area: "สยาม", host: "อาร์ม", lat: 13.7466, lng: 100.5318, start: T + 130 * MIN, dur: 60, need: 3 }),
+  P({ id: "ex-boardnight", sub: "boardgame", category: "games", title: "บอร์ดเกมไนท์ มือใหม่ก็มาได้", place: "ร้านบอร์ดเกม สามย่านมิตรทาวน์ ชั้น 2", area: "สามย่าน", host: "บี", level: "beginner", series: "bg-weekly", lat: 13.7337, lng: 100.5287, start: new Date(new Date(T + DAY).setHours(19, 0, 0, 0)).getTime(), dur: 180, need: 6, joined: 2 }),
+  P({ id: "ex-sketch", sub: "sketch", category: "make", title: "สเก็ตช์ภาพปากคลองตลาด ทุกระดับ", place: "", area: "ปากคลองตลาด", host: "พลอย", lat: 13.7436, lng: 100.5003, start: T + 90 * MIN, dur: 90, need: 6, joined: 3, visibility: "accepted" }),
   // ended: history, buried under newer Pulses nearby
   P({ id: "ex-uke", category: "music", title: "วงอูคูเลเล่", place: "สนามหญ้าริมน้ำ สวนลุมพินี", area: "ลุมพินี", host: "ฝน", lat: 13.7312, lng: 100.5418, start: T - DAY, dur: 60, need: 5, joined: 5 }),
-  P({ id: "ex-wolf", category: "games", title: "Werewolf 8 คน", place: "ศาลา สวนลุมพินี", area: "ลุมพินี", host: "ตี๋", lat: 13.7322, lng: 100.5409, start: T - 3 * DAY, dur: 90, need: 7, joined: 7 }),
+  P({ id: "ex-wolf", sub: "werewolf", category: "games", title: "Werewolf 8 คน", place: "ศาลา สวนลุมพินี", area: "ลุมพินี", host: "ตี๋", lat: 13.7322, lng: 100.5409, start: T - 3 * DAY, dur: 90, need: 7, joined: 7 }),
   P({ id: "ex-taichi", category: "outdoor", title: "ไทเก๊กยามเช้า", place: "หอนาฬิกา สวนลุมพินี", area: "ลุมพินี", host: "เล็ก", lat: 13.7306, lng: 100.5432, start: T - 6 * DAY, dur: 45, need: 6, joined: 4 }),
-  P({ id: "ex-rally", category: "sport", title: "ซ้อมพิกเกิลบอล", place: "คอร์ต 1 สนามสวนลุมพินี", area: "ลุมพินี", host: "ใหม่", lat: 13.7295, lng: 100.5391, start: T - 2 * DAY, dur: 60, need: 3, joined: 3 }),
-  P({ id: "ex-chess", category: "games", title: "หมากรุกที่สามย่าน เอากระดานมาด้วย", place: "ลานกลาง สามย่านมิตรทาวน์", area: "สามย่าน", host: "กฤต", lat: 13.7340, lng: 100.5282, start: T - 5 * HOUR, dur: 120, need: 2, joined: 2 }),
-  P({ id: "ex-film", category: "make", title: "เดินถ่ายรูปฟิล์ม", place: "ตรอกตลาดน้อย", area: "ตลาดน้อย", host: "พลอย", lat: 13.7310, lng: 100.5130, start: T - 4 * DAY, dur: 90, need: 6, joined: 5 }),
+  P({ id: "ex-rally", sub: "pickleball", category: "sport", title: "ซ้อมพิกเกิลบอล", place: "คอร์ต 1 สนามสวนลุมพินี", area: "ลุมพินี", host: "ใหม่", lat: 13.7295, lng: 100.5391, start: T - 2 * DAY, dur: 60, need: 3, joined: 3 }),
+  P({ id: "ex-chess", sub: "chess", category: "games", title: "หมากรุกที่สามย่าน เอากระดานมาด้วย", place: "ลานกลาง สามย่านมิตรทาวน์", area: "สามย่าน", host: "กฤต", lat: 13.7340, lng: 100.5282, start: T - 5 * HOUR, dur: 120, need: 2, joined: 2 }),
+  P({ id: "ex-film", sub: "photo", category: "make", title: "เดินถ่ายรูปฟิล์ม", place: "ตรอกตลาดน้อย", area: "ตลาดน้อย", host: "พลอย", lat: 13.7310, lng: 100.5130, start: T - 4 * DAY, dur: 90, need: 6, joined: 5 }),
   P({ id: "ex-frisbee", category: "outdoor", title: "โยนฟริสบี้ มือใหม่ยินดี", place: "สนามหญ้าเบญจกิติ", area: "เบญจกิติ", host: "โอ๊ต", lat: 13.7302, lng: 100.5600, start: T - 26 * HOUR, dur: 60, need: 6, joined: 6 }),
-  P({ id: "ex-badminton", category: "sport", title: "ตีแบดคู่", place: "สนามกีฬาในร่มสยาม", area: "สยาม", host: "อาร์ม", lat: 13.7462, lng: 100.5322, start: T - DAY - 3 * HOUR, dur: 60, need: 4, joined: 4 }),
+  P({ id: "ex-badminton", sub: "badminton", category: "sport", title: "ตีแบดคู่", place: "สนามกีฬาในร่มสยาม", area: "สยาม", host: "อาร์ม", lat: 13.7462, lng: 100.5322, start: T - DAY - 3 * HOUR, dur: 60, need: 4, joined: 4 }),
 ];
 
 let posts: FeedPost[] = [
@@ -106,7 +106,7 @@ export function demoCreate(np: NewPulse): string {
       starts_at: iso(start), ends_at: iso(start + np.durationMin * MIN), visibility: np.visibility, area_name: np.area || "Nearby",
       rough_lat: roughen(np.lat), rough_lng: roughen(np.lng), created_at: iso(Date.now()), memberships: [],
       exact: { lat: np.lat, lng: np.lng, place_name: np.place || np.area || "จุดที่ปักหมุด" },
-      level: np.level, series_id: series, pulse_signals: [],
+      level: np.level, series_id: series, pulse_signals: [], sub: np.sub,
     });
     if (np.contact.line_id || np.contact.phone || np.contact.landmark) contacts[id] = np.contact;
   }

@@ -31,7 +31,16 @@ export function useLocation() {
     write("manualSpot", null); setSource("default");
     navigator.geolocation?.getCurrentPosition((p) => { setMe({ lat: p.coords.latitude, lng: p.coords.longitude }); setSource("gps"); }, () => {});
   }, []);
-  return { me, source, setManual, useGps };
+  /** Asks the phone for a fresh GPS fix (shows the permission prompt if needed) and stops using a manual spot. */
+  const locate = useCallback(() => new Promise<{ ok: true; ll: LatLng } | { ok: false; denied: boolean }>((resolve) => {
+    if (!("geolocation" in navigator)) return resolve({ ok: false, denied: false });
+    navigator.geolocation.getCurrentPosition(
+      (p) => { const ll = { lat: p.coords.latitude, lng: p.coords.longitude }; write("manualSpot", null); setMe(ll); setSource("gps"); resolve({ ok: true, ll }); },
+      (e) => resolve({ ok: false, denied: e.code === e.PERMISSION_DENIED }),
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000 },
+    );
+  }), []);
+  return { me, source, setManual, useGps, locate };
 }
 
 /** Pulses near `center` + their feed posts, kept live via realtime. */

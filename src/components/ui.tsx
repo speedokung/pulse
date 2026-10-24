@@ -1,3 +1,4 @@
+import { subName } from "../lib/categories";
 import type { Contact, FeedPost, Level, Pulse, Signal } from "../lib/types";
 import { hostedCount } from "../lib/trust";
 import { CATS, catIcon } from "../lib/categories";
@@ -90,9 +91,11 @@ export const levelLabel = (l: Level) => t(LEVEL_KEY[l]);
 /** Skill level + weekly tags shown on cards and in the detail. */
 export function Tags({ p }: { p: Pulse }) {
   const lv = p.level && p.level !== "any" ? p.level : null;
-  if (!lv && !p.series_id) return null;
+  const sub = subName(p.sub);
+  if (!lv && !p.series_id && !sub) return null;
   return (
     <span className="tags">
+      {sub && <span className="tagchip">{sub}</span>}
       {lv && <span className={`tagchip lv-${lv}`}>{levelLabel(lv)}</span>}
       {p.series_id && <span className="tagchip">↻ {t("weekly")}</span>}
     </span>

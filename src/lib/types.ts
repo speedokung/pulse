@@ -39,6 +39,7 @@ export interface Pulse {
   contact?: Contact | null;
   level?: Level;
   series_id?: string | null;
+  sub?: string | null;
   pulse_signals?: Signal[];
 }
 
@@ -73,4 +74,5 @@ export interface NewPulse {
   contact: Contact;
   level: Level;
   repeatWeeks: number;
+  sub: string | null;
 }
