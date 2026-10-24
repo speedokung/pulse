@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: A; src: url(fonts/anuphan-thai-700-normal.woff2); font-weight: 700; unicode-range: U+0E00-0E7F; }
+@font-face { font-family: A; src: url(fonts/anuphan-latin-700-normal.woff2); font-weight: 700; }
+@font-face { font-family: A; src: url(fonts/anuphan-thai-400-normal.woff2); font-weight: 400; unicode-range: U+0E00-0E7F; }
+@font-face { font-family: A; src: url(fonts/anuphan-latin-400-normal.woff2); font-weight: 400; }
+:root { --accent: #ff5a36; --ink: #0d1416; --paper: #f6f8f8; }
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: #0d1416; font-family: A, sans-serif; color: #fff; }
+.scene { position: absolute; inset: 0; overflow: hidden; visibility: hidden; }
+.bg { position: absolute; inset: 0; }
+.bg img, .bg video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 50%; }
+.shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(13,20,22,.55) 0%, rgba(13,20,22,.15) 35%, rgba(13,20,22,.25) 60%, rgba(13,20,22,.85) 100%); }
+/* IG safe area: keep words between y≈250 and y≈1480, away from the right-hand buttons */
+.textblock { position: absolute; left: 80px; right: 140px; top: 330px; display: grid; gap: 18px; }
+.kicker { font-size: 44px; font-weight: 700; color: var(--accent); background: rgba(13,20,22,.75); padding: 10px 26px; border-radius: 999px; justify-self: start; }
+.line { font-size: 118px; font-weight: 700; line-height: 1.12; text-shadow: 0 6px 30px rgba(0,0,0,.45); }
+.line.hl { color: var(--ink); background: var(--accent); justify-self: start; padding: 0 26px 6px; border-radius: 18px; text-shadow: none; }
+.sub { font-size: 46px; font-weight: 400; color: rgba(255,255,255,.88); }
+.brand { position: absolute; left: 60px; top: 130px; z-index: 5; display: flex; align-items: center; gap: 14px; font-size: 44px; font-weight: 700; background: rgba(13,20,22,.7); padding: 12px 26px 12px 18px; border-radius: 999px; }
+.brand i { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 7px rgba(255,90,54,.3); }
+/* phone mockup */
+.phone { position: absolute; left: 50%; top: 410px; width: 702px; height: 1170px; margin-left: -351px; border-radius: 74px; background: #05090a; padding: 18px;
+  box-shadow: 0 40px 120px rgba(0,0,0,.6), 0 0 0 3px #2a3a3e inset; }
+.screen { position: relative; width: 100%; height: 100%; border-radius: 58px; overflow: hidden; background: #0d1416; }
+.screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.tap { position: absolute; z-index: 50; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 8px solid #fff; background: rgba(255,255,255,.25); pointer-events: none; }
+.caption { position: absolute; left: 70px; right: 70px; top: 255px; text-align: center; }
+.caption span { display: inline-block; font-size: 58px; font-weight: 700; background: #fff; color: var(--ink); padding: 14px 34px 18px; border-radius: 26px; box-shadow: 0 12px 40px rgba(0,0,0,.35); }
+.caption span b { color: var(--accent); }
+/* notifications */
+.notes { position: absolute; left: 80px; right: 80px; top: 640px; display: grid; gap: 26px; }
+.note { display: flex; gap: 26px; align-items: center; background: rgba(20,29,32,.92); border: 2px solid #25343a; border-radius: 40px; padding: 30px 34px; box-shadow: 0 18px 50px rgba(0,0,0,.4); }
+.note .av { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; font-size: 46px; font-weight: 700; flex: none; }
+.note b { display: block; font-size: 46px; }
+.note span { display: block; font-size: 38px; color: #93a4a1; }
+.note .omw { color: var(--accent); }
+.foot { position: absolute; left: 80px; right: 140px; top: 1290px; font-size: 96px; font-weight: 700; line-height: 1.15; }
+.foot em { font-style: normal; color: var(--ink); background: var(--accent); padding: 0 22px 6px; border-radius: 16px; }
+/* end card */
+.end { background: var(--accent); }
+.end .logo { position: absolute; left: 50%; top: 380px; width: 300px; height: 300px; margin-left: -150px; border-radius: 70px; box-shadow: 0 30px 80px rgba(0,0,0,.25); }
+.end .t1, .end .t2 { position: absolute; left: 0; right: 0; text-align: center; font-weight: 700; color: var(--ink); }
+.end .t1 { top: 790px; font-size: 92px; }
+.end .t2 { top: 905px; font-size: 104px; color: #fff; }
+.end .url { position: absolute; left: 0; right: 0; top: 1130px; text-align: center; }
+.end .url span { display: inline-block; font-size: 74px; font-weight: 700; background: var(--ink); color: #fff; padding: 18px 54px 24px; border-radius: 999px; white-space: nowrap; }
+.end .s { position: absolute; left: 0; right: 0; top: 1290px; text-align: center; font-size: 46px; color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+// ---------- timing helpers ----------
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const ease = (x) => 1 - Math.pow(1 - clamp(x), 3);            // ease-out cubic
+const back = (x) => { x = clamp(x); const c = 1.6; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const prog = (t, start, dur) => clamp((t - start) / dur);
+
+// ---------- background painters (fallbacks when there's no AI footage yet) ----------
+const PAINT = {
+  court: () => `<svg viewBox="0 0 1080 1920" width="1080" height="1920" preserveAspectRatio="xMidYMid slice">
+    <defs><linearGradient id="fl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f3b33"/><stop offset="1" stop-color="#14594a"/></linearGradient></defs>
+    <rect width="1080" height="1920" fill="#0b1416"/><polygon points="250,700 830,700 1180,1920 -100,1920" fill="url(#fl)"/>
+    <g stroke="#e9f2ef" stroke-opacity=".85" stroke-width="10" fill="none">
+      <polygon points="300,760 780,760 1030,1820 50,1820"/><line x1="540" y1="760" x2="540" y2="1820"/>
+      <line x1="262" y1="920" x2="818" y2="920"/><line x1="135" y1="1460" x2="945" y2="1460"/></g>
+    <g stroke="#cfd8d6" stroke-width="6"><line x1="190" y1="1130" x2="890" y2="1130"/><line x1="190" y1="1030" x2="190" y2="1130"/><line x1="890" y1="1030" x2="890" y2="1130"/></g>
+    <path d="M200 1035 L880 1035 L880 1080 L200 1080 Z" fill="none" stroke="#cfd8d6" stroke-opacity=".5" stroke-width="3" stroke-dasharray="14 10"/>
+    <rect x="0" y="0" width="1080" height="700" fill="#0b1416"/>
+    <g opacity=".5"><rect x="80" y="120" width="40" height="560" fill="#1c2a2e"/><rect x="960" y="120" width="40" height="560" fill="#1c2a2e"/></g></svg>`,
+  dusk: () => `<svg viewBox="0 0 1080 1920" width="1080" height="1920"><defs><radialGradient id="g" cx=".5" cy=".35" r=".8"><stop offset="0" stop-color="#2b1a14"/><stop offset=".6" stop-color="#121a1c"/><stop offset="1" stop-color="#0b1113"/></radialGradient></defs><rect width="1080" height="1920" fill="url(#g)"/></svg>`,
+};
+const SHUTTLE = `<svg width="150" height="190" viewBox="0 0 150 190"><path d="M30 10 L120 10 L95 120 L55 120 Z" fill="#f4f7f6" stroke="#c9d3d1" stroke-width="4"/><path d="M45 10 L65 120 M75 10 L75 120 M105 10 L85 120" stroke="#c9d3d1" stroke-width="3"/><ellipse cx="75" cy="140" rx="34" ry="30" fill="#ff5a36"/></svg>`;
+
+// ---------- build the DOM from the script ----------
+const SPEC = window.SPEC;
+const stage = document.getElementById('stage');
+let t0 = 0;
+const scenes = SPEC.scenes.map((s, i) => {
+  const el = document.createElement('div'); el.className = 'scene' + (s.type === 'end' ? ' end' : ''); stage.appendChild(el);
+  const sc = { ...s, el, start: t0 }; t0 += s.dur;
+  if (s.type !== 'end') {
+    const bg = document.createElement('div'); bg.className = 'bg'; el.appendChild(bg);
+    const m = s.bg || { paint: 'dusk' };
+    if (m.video) bg.innerHTML = `<video src="${m.video}" muted playsinline preload="auto"></video>`;
+    else if (m.image) bg.innerHTML = `<img src="${m.image}">`;
+    else bg.innerHTML = PAINT[m.paint || 'dusk']();
+    sc.media = bg.querySelector('img,video'); sc.mediaSpec = m;
+    if (m.image || m.video) el.insertAdjacentHTML('beforeend', '<div class="shade"></div>');
+    if (m.paint === 'court' && !m.image && !m.video) { el.insertAdjacentHTML('beforeend', `<div class="shuttle" style="position:absolute;left:600px;top:0">${SHUTTLE}</div>`); sc.shuttle = el.querySelector('.shuttle'); }
+  }
+  if (s.type === 'text' || s.type === 'notify') {
+    const tb = document.createElement('div'); tb.className = 'textblock'; el.appendChild(tb);
+    if (s.kicker) tb.insertAdjacentHTML('beforeend', `<div class="kicker">${s.kicker}</div>`);
+    (s.lines || []).forEach((l, k) => tb.insertAdjacentHTML('beforeend', `<div class="line${(s.highlight || []).includes(k) ? ' hl' : ''}">${l}</div>`));
+    if (s.sub) tb.insertAdjacentHTML('beforeend', `<div class="sub">${s.sub}</div>`);
+    sc.parts = [...tb.children];
+  }
+  if (s.type === 'notify') {
+    const n = document.createElement('div'); n.className = 'notes'; el.appendChild(n);
+    s.items.forEach((it) => n.insertAdjacentHTML('beforeend', `<div class="note"><div class="av" style="background:${it.color}">${it.name[0]}</div><div><b>${it.title}</b><span class="${it.omw ? 'omw' : ''}">${it.text}</span></div></div>`));
+    sc.notes = [...n.children];
+    if (s.foot) { el.insertAdjacentHTML('beforeend', `<div class="foot">${s.foot.html}</div>`); sc.footEl = el.querySelector('.foot'); }
+  }
+  if (s.type === 'phone') {
+    el.insertAdjacentHTML('beforeend', `<div class="phone"><div class="screen">${s.steps.map((st) => `<img src="${SPEC.screens}/${st.screen}">`).join('')}<div class="tap"></div></div></div><div class="caption"><span></span></div>`);
+    sc.imgs = [...el.querySelectorAll('.screen img')]; sc.tapEl = el.querySelector('.tap'); sc.cap = el.querySelector('.caption span'); sc.phoneEl = el.querySelector('.phone');
+  }
+  if (s.type === 'end') {
+    el.innerHTML = `<img class="logo" src="${s.logo}"><div class="t1">${s.title}</div><div class="t2">${s.title2}</div><div class="url"><span>${s.url}</span></div><div class="s">${s.sub}</div>`;
+    sc.parts = [...el.children];
+  }
+  if (SPEC.brand && s.type !== 'end') el.insertAdjacentHTML('beforeend', `<div class="brand"><i></i>${SPEC.brand}</div>`);
+  return sc;
+});
+window.DURATION = t0;
+
+// ---------- draw one frame ----------
+async function frame(t) {
+  const waits = [];
+  for (const s of scenes) {
+    const lt = t - s.start, on = lt >= 0 && lt < s.dur;
+    s.el.style.visibility = on ? 'visible' : 'hidden';
+    if (!on) continue;
+    // a short slide-in for every scene after the first
+    const enter = s.start > 0 ? ease(lt / 0.28) : 1;
+    s.el.style.transform = `translateY(${(1 - enter) * 120}px)`; s.el.style.opacity = s.start > 0 ? clamp(lt / 0.18) : 1;
+    if (s.media) {
+      const k = s.mediaSpec.kenburns ?? 0.08, z = 1 + k * (lt / s.dur);
+      s.media.style.transform = `scale(${z}) translate(${(s.mediaSpec.panX || 0) * lt / s.dur}%, ${(s.mediaSpec.panY || 0) * lt / s.dur}%)`;
+      if (s.media.tagName === 'VIDEO') waits.push(new Promise((r) => { const v = s.media; const want = Math.min(lt + (s.mediaSpec.from || 0), (v.duration || 99) - 0.05); if (Math.abs(v.currentTime - want) < 0.001) return r(); v.addEventListener('seeked', r, { once: true }); v.currentTime = want; }));
+    }
+    if (s.shuttle) { const f = ease(lt / 1.1); s.shuttle.style.transform = `translate(${-120 * f}px, ${300 + 1050 * f}px) rotate(${200 * (1 - f) + 15}deg)`; }
+    if (s.parts) s.parts.forEach((p, k) => { const a = back((lt - 0.12 - k * (s.stagger ?? 0.22)) / 0.45); p.style.opacity = clamp(a * 1.4); p.style.transform = `translateY(${(1 - a) * 60}px) scale(${0.92 + 0.08 * a})`; });
+    if (s.footEl) { const a = back((lt - s.foot.at) / 0.45); s.footEl.style.opacity = clamp(a * 1.4); s.footEl.style.transform = `scale(${0.8 + 0.2 * a})`; }
+    if (s.notes) s.notes.forEach((n, k) => { const at = s.items[k].at; const a = back((lt - at) / 0.4); n.style.opacity = clamp(a * 1.5); n.style.transform = `translateX(${(1 - a) * 140}px)`; });
+    if (s.type === 'phone') {
+      const vp = SPEC.viewport, scale = 666 / vp.width; // screen inner width in px
+      let cur = 0; s.steps.forEach((st, k) => { if (lt >= st.at) cur = k; });
+      s.imgs.forEach((im, k) => { im.style.zIndex = k; im.style.opacity = k < cur ? 1 : k > cur ? 0 : (cur === 0 ? 1 : clamp((lt - s.steps[cur].at) / 0.18)); });
+      // the tap lands 0.35 s before the screen changes
+      const next = s.steps[cur + 1];
+      const tapStep = next && next.tap && lt > next.at - 0.45 ? next : null;
+      if (tapStep) { const pt = SPEC.taps[tapStep.tap]; const a = (lt - (tapStep.at - 0.45)) / 0.45; s.tapEl.style.display = 'block'; s.tapEl.style.left = `${pt.x * scale}px`; s.tapEl.style.top = `${pt.y * scale}px`; s.tapEl.style.transform = `scale(${1.25 - 0.45 * ease(a)})`; s.tapEl.style.opacity = a < 0.85 ? 1 : 1 - (a - 0.85) / 0.15; }
+      else s.tapEl.style.display = 'none';
+      const capT = lt - s.steps[cur].at, ca = back(capT / 0.35);
+      if (s.cap.dataset.k !== String(cur)) { s.cap.innerHTML = s.steps[cur].caption; s.cap.dataset.k = cur; }
+      s.cap.style.transform = `scale(${0.85 + 0.15 * ca})`; s.cap.style.opacity = clamp(ca * 1.5);
+      const pin = ease(lt / 0.5); s.phoneEl.style.transform = `translateY(${(1 - pin) * 200}px)`;
+    }
+  }
+  await Promise.all(waits);
+}
+window.frame = frame;
+window.ready = Promise.all([document.fonts.ready, ...[...document.images].map((i) => i.complete ? 1 : new Promise((r) => { i.onload = i.onerror = r; })),
+  ...[...document.querySelectorAll('video')].map((v) => v.readyState >= 2 ? 1 : new Promise((r) => { v.onloadeddata = v.onerror = r; }))]);
+</script>
+</body>
+</html>

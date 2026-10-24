@@ -1,0 +1,111 @@
+{
+  "name": "01 ขาด 2 คน",
+  "fps": 30,
+  "brand": "แถว",
+  "screens": "screens",
+  "caption": "เพื่อนเทอีกแล้วใช่มั้ย แถวบ้านคุณมีคนชวนเล่นอยู่ เปิด thaew.com ดูได้เลย ไม่ต้องโหลดแอป ไม่ต้องสมัคร (ลิงก์ใน bio)\n\n#แถว #หาเพื่อนเล่น #ตีแบด #แบดมินตัน #กรุงเทพ",
+  "scenes": [
+    {
+      "type": "text",
+      "dur": 3.2,
+      "bg": {
+        "paint": "court"
+      },
+      "ai": {
+        "kind": "image",
+        "prompt": "Vertical 9:16 photo, indoor badminton court in Bangkok at night, one Thai man in his late 20s in a plain t-shirt standing alone at the baseline holding a racket, looking at his phone, disappointed, empty court around him, fluorescent sports-hall light, shot on iPhone, candid, realistic, no text, no logos"
+      },
+      "kicker": "ทุกคนเคยเจอ",
+      "lines": [
+        "จองสนามแล้ว",
+        "เพื่อนเทอีกแล้ว"
+      ],
+      "highlight": [
+        1
+      ]
+    },
+    {
+      "type": "phone",
+      "dur": 7.4,
+      "bg": {
+        "paint": "dusk"
+      },
+      "steps": [
+        {
+          "at": 0,
+          "screen": "01-map.png",
+          "caption": "เปิด <b>thaew.com</b>"
+        },
+        {
+          "at": 1.7,
+          "tap": "fab",
+          "screen": "02-form.png",
+          "caption": "กด <b>ตั้งก๊วน</b>"
+        },
+        {
+          "at": 3.5,
+          "tap": "sub",
+          "screen": "03-form-sub.png",
+          "caption": "เลือก <b>แบดมินตัน</b> แอปกรอกให้"
+        },
+        {
+          "at": 5.3,
+          "tap": "go",
+          "screen": "04-live.png",
+          "caption": "กด <b>เริ่มเลย</b> คนแถวนี้เห็นทันที"
+        }
+      ]
+    },
+    {
+      "type": "notify",
+      "dur": 5.2,
+      "bg": {
+        "paint": "dusk"
+      },
+      "ai": {
+        "kind": "image",
+        "prompt": "Vertical 9:16 photo, two friendly Thai people in their 20s walking onto an indoor badminton court at night holding rackets, smiling and waving toward the camera, sports hall lights, candid iPhone photo, realistic, no text, no logos"
+      },
+      "kicker": "20 นาทีต่อมา",
+      "items": [
+        {
+          "at": 0.5,
+          "name": "แนท",
+          "color": "#2b8a3e",
+          "title": "แนท กำลังไป",
+          "text": "อีก 5 นาทีถึง",
+          "omw": true
+        },
+        {
+          "at": 1.3,
+          "name": "บี",
+          "color": "#6741d9",
+          "title": "บี กำลังไป",
+          "text": "อีก 8 นาทีถึง",
+          "omw": true
+        },
+        {
+          "at": 2.4,
+          "name": "แนท",
+          "color": "#2b8a3e",
+          "title": "แนท · แชทในก๊วน",
+          "text": "ถึงแล้ว ใส่เสื้อส้มนะ"
+        }
+      ],
+      "foot": {
+        "at": 3.3,
+        "html": "ครบ 4 คน<br><em>ตีกันยาวๆ</em>"
+      }
+    },
+    {
+      "type": "end",
+      "dur": 3.4,
+      "logo": "assets/logo.png",
+      "title": "เพื่อนเท",
+      "title2": "คนแถวนี้ไม่เท",
+      "url": "thaew.com",
+      "sub": "ไม่ต้องโหลดแอป · ไม่ต้องสมัคร",
+      "stagger": 0.18
+    }
+  ]
+}
