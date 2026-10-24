@@ -53,7 +53,7 @@ const ARROW = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" strok
 D.slides.forEach((s, i) => {
   const el = document.createElement('div'); deck.appendChild(el);
   const n = D.slides.length, brand = `<div class="brand"><i></i>แถว</div>`, count = `<div class="count">${i + 1}/${n}</div>`;
-  if (s.type === 'cover') { el.className = 'slide dark cover'; el.innerHTML = `<img class="bgimg" src="${s.image}"><div class="shade"></div>${brand}<h1>${s.title}</h1><p>${s.sub || ''}</p><div class="swipe">ปัดดู ${ARROW}</div>`; }
+  if (s.type === 'cover') { el.className = 'slide dark cover'; el.innerHTML = `<img class="bgimg" src="${s.image}"><div class="shade"></div>${brand}<h1>${s.title}</h1><p>${s.sub || ''}</p>${s.url ? `<div class="swipe">${s.url}</div>` : `<div class="swipe">ปัดดู ${ARROW}</div>`}`; }
   if (s.type === 'tip') { el.className = `slide ${s.theme || 'light'} tip${s.image ? ' withimg' : ''}`; el.innerHTML = `${brand}${count}<div class="num">${s.num}</div><h2>${s.title}</h2><p>${s.body}</p>${s.note ? `<div class="note">${s.note}</div>` : ''}${s.image ? `<img class="tipimg" src="${s.image}">` : ''}`; }
   if (s.type === 'photo') { el.className = 'slide dark photo'; el.innerHTML = `<img class="bgimg" src="${s.image}"><div class="shade"></div>${brand}${count}${s.tag ? `<div class="tag">${s.tag}</div>` : ''}<h2>${s.title}</h2><p>${s.body || ''}</p>`; }
   if (s.type === 'screen') { el.className = 'slide light screen'; el.innerHTML = `${brand}${count}<h2>${s.title}</h2><p>${s.body || ''}</p><img class="shot" src="${s.image}">`; }
