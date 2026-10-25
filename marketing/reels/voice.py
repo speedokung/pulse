@@ -80,7 +80,30 @@ def silences(path, min_d=0.3):
     log = subprocess.run(["ffmpeg", "-i", path, "-af", f"silencedetect=n=-38dB:d={min_d}", "-f", "null", "-"], capture_output=True, text=True).stderr
     st = [float(x.split("silence_start: ")[1].split()[0]) for x in log.splitlines() if "silence_start: " in x]
     en = [float(x.split("silence_end: ")[1].split()[0]) for x in log.splitlines() if "silence_end: " in x]
-    return list(zip(st, en))
+    merged = []   # silencedetect can report one pause as several back-to-back pieces
+    for a, b in zip(st, en):
+        if merged and a - merged[-1][1] < 0.03: merged[-1] = (merged[-1][0], b)
+        else: merged.append((a, b))
+    return merged
+
+def pick_cuts(gaps, texts, total):
+    """Choose one pause per line break, in order: near where the break should fall given each line's length,
+    preferring longer pauses (a comma inside a line also makes a short pause)."""
+    n = len(texts) - 1
+    lens = [max(1, len(t.replace(" ", ""))) for t in texts]
+    expect = [total * sum(lens[:k + 1]) / sum(lens) for k in range(n)]
+    INF = float("inf")
+    # best[k][j]: cost of using gap j for break k (gaps strictly increasing)
+    best = [[INF] * len(gaps) for _ in range(n)]; prev = [[-1] * len(gaps) for _ in range(n)]
+    for k in range(n):
+        for j, (a, b) in enumerate(gaps):
+            c = abs((a + b) / 2 - expect[k]) - 1.5 * (b - a)
+            if k == 0: best[k][j] = c; continue
+            for i in range(j):
+                if best[k - 1][i] + c < best[k][j]: best[k][j], prev[k][j] = best[k - 1][i] + c, i
+    j = min(range(len(gaps)), key=lambda j: best[n - 1][j]); out = []
+    for k in range(n - 1, -1, -1): out.append(gaps[j]); j = prev[k][j]
+    return out[::-1]
 
 def gemini_script(lines, voice, style):
     """All of a Reel's lines in ONE Gemini request (the free tier allows ~10 requests a day), split back
@@ -92,11 +115,11 @@ def gemini_script(lines, voice, style):
     if not os.path.exists(raw):
         gemini_tts(" <long pause> ".join(texts), name, style, raw)
     total = dur(raw)
-    gaps = [g for g in silences(raw) if g[0] > 0.05 and g[1] < total - 0.05]   # inner pauses only
+    gaps = [g for g in silences(raw, 0.12) if g[0] > 0.05 and g[1] < total - 0.05]   # inner pauses only
     if len(gaps) < len(texts) - 1:
         os.remove(raw)
         sys.exit(f"could only find {len(gaps)} pauses for {len(texts)} lines — run again (one more request)")
-    cuts = sorted(sorted(gaps, key=lambda g: g[1] - g[0], reverse=True)[:len(texts) - 1])
+    cuts = pick_cuts(gaps, texts, total)
     bounds = [0.0] + [(a + b) / 2 for a, b in cuts] + [total]
     out = []
     for i, (t, text, slot) in enumerate(lines):
