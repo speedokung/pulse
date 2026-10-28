@@ -21,6 +21,7 @@ export interface Actions {
   chat: (p: Pulse, body: string) => Promise<boolean>;
   saveContact: (p: Pulse, c: Contact) => Promise<boolean>;
   signal: (p: Pulse, kind: Signal["kind"] | null, etaMin?: number | null) => void;
+  setCover: (p: Pulse, file: File | null) => void;
 }
 
 export const Lock = () => (

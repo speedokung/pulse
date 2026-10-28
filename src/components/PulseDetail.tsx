@@ -8,6 +8,7 @@ import { openProfile } from "../lib/profileBus";
 import { Composer, photoSrc, PostLine } from "./Posts";
 import { ContactBox, GroupChat, SignalsBox } from "./Contact";
 import { t } from "../lib/i18n";
+import { coverSrc } from "../lib/api";
 
 export function PulseDetail({ p, uid, me, posts, a }: { p: Pulse; uid: string | null; me: LatLng; posts: FeedPost[]; a: Actions }) {
   const past = isOver(p), d = distanceM(me, pos(p)), host = isHost(p, uid);
@@ -15,9 +16,11 @@ export function PulseDetail({ p, uid, me, posts, a }: { p: Pulse; uid: string | 
   const mine = posts.filter((f) => f.pulse_id === p.id);
   const photo = mine.find((f) => photoSrc(f));
   const canPost = isParticipant(p, uid) && (!past || Date.now() - new Date(p.ends_at).getTime() < 3 * 3600_000);
+  const cover = coverSrc(p);
   return (
-    <div className="detail" role="dialog" aria-label={p.title}>
+    <div className={`detail${cover ? " hascover" : ""}`} role="dialog" aria-label={p.title}>
       <button className="x" onClick={() => a.select(null)} aria-label="Close">×</button>
+      {cover && <img className="detail-cover" src={cover} alt="" />}
       <div className="kicker" style={{ color: past ? "var(--muted)" : CATS[p.category].color }}>
         {past ? `${t("ended")} · ` : ""}{catName(p.category)}
       </div>
@@ -25,7 +28,7 @@ export function PulseDetail({ p, uid, me, posts, a }: { p: Pulse; uid: string | 
       <Tags p={p} />
       <div className="meta"><When p={p} /></div>
       <div className="meta"><Place p={p} /><span>{dist(d)}{past ? "" : ` · ${t("walk", { n: walkMin(d) })}`}</span><HostLine p={p} uid={uid} /></div>
-      {photo && <img className="detail-photo" src={photoSrc(photo)!} alt={`Photo from ${p.title}`} />}
+      {photo && !cover && <img className="detail-photo" src={photoSrc(photo)!} alt={`Photo from ${p.title}`} />}
 
       {!past && showsExact(p) && <NavButton p={p} label={t("navigateG")} />}
       {!past && !showsExact(p) && (
@@ -67,7 +70,11 @@ export function PulseDetail({ p, uid, me, posts, a }: { p: Pulse; uid: string | 
             </div>
           )}
           <div className="cfoot"><span className="meta">{p.visibility === "all" ? t("spotEveryone") : t("spotAccepted")}</span>
-            <div className="btnrow"><button className="mini" onClick={() => a.extend(p, 30)}>{t("extend30")}</button><button className="mini" onClick={() => a.end(p)}>{status(p).k === "live" ? t("endNow") : t("cancel")}</button></div></div>
+            <div className="btnrow">
+              <label className="mini">{cover ? t("coverChange") : t("coverAdd")}
+                <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) a.setCover(p, f); e.target.value = ""; }} /></label>
+              {cover && <button className="mini" onClick={() => a.setCover(p, null)}>{t("coverRemove")}</button>}
+              <button className="mini" onClick={() => a.extend(p, 30)}>{t("extend30")}</button><button className="mini" onClick={() => a.end(p)}>{status(p).k === "live" ? t("endNow") : t("cancel")}</button></div></div>
         </>
       )}
 

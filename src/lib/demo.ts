@@ -107,10 +107,16 @@ export function demoCreate(np: NewPulse): string {
       rough_lat: roughen(np.lat), rough_lng: roughen(np.lng), created_at: iso(Date.now()), memberships: [],
       exact: { lat: np.lat, lng: np.lng, place_name: np.place || np.area || "จุดที่ปักหมุด" },
       level: np.level, series_id: series, pulse_signals: [], sub: np.sub,
+      local_cover: np.cover ? URL.createObjectURL(np.cover) : undefined,
     });
     if (np.contact.line_id || np.contact.phone || np.contact.landmark) contacts[id] = np.contact;
   }
   emit(); return base;
+}
+export function demoSetCover(id: string, file: File | null) {
+  const p = find(id), url = file ? URL.createObjectURL(file) : undefined;
+  for (const q of pulses) if (q.id === id || (p.series_id && q.series_id === p.series_id)) q.local_cover = url;
+  emit();
 }
 export function demoSignal(id: string, kind: Signal["kind"] | null, eta: number | null) {
   const p = find(id);

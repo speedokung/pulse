@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Category, LatLng, Pulse } from "./lib/types";
 import { CAT_KEYS, CATS, catName, RADII, RadiusKey, subsOf } from "./lib/categories";
 import { configured } from "./lib/supabase";
-import { createPulse, endPulse, extendPulse, hostStats, sendMessage, setContact, setSignal, errText, joinPulse, leavePulse, postToFeed, respondRequest, searchHistory } from "./lib/api";
+import { createPulse, endPulse, extendPulse, hostStats, sendMessage, setContact, setSignal, errText, joinPulse, leavePulse, postToFeed, setPulseCover, respondRequest, searchHistory } from "./lib/api";
 import { accepted, DAY, isOver, ms, pos, status } from "./lib/pulse";
 import { distanceM } from "./lib/geo";
 import { setHostStats } from "./lib/trust";
@@ -220,6 +220,7 @@ export default function App() {
       if (!uid) return;
       run(() => setSignal(uid, p.id, kind, eta), kind === "omw" ? t("tOmw") : kind === "interested" ? t("tInterested") : undefined);
     },
+    setCover: (p, file) => { run(() => setPulseCover(p.id, file), file ? t("tCoverSaved") : t("tCoverRemoved")); },
     post: async (p, kind, body, file) => {
       if (needName(t("whyPost"))) return false;
       return run(() => postToFeed(uid!, p.id, kind, body, file), kind === "checkin" ? t("tCheckedIn") : t("tPosted"));

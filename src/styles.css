@@ -78,6 +78,15 @@ a.mini { text-decoration: none; display: inline-flex; align-items: center; }
   width: min(380px, calc(100% - 32px)); max-height: calc(100% - 100px); overflow-y: auto; background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; display: grid; gap: 6px; }
 .detail h3 { margin: 0 0 2px; font-family: var(--f-display); font-size: 22px; line-height: 1.12; letter-spacing: -.015em; text-wrap: balance; padding-right: 24px; }
 .detail .x { position: absolute; top: 8px; right: 8px; border: none; background: none; color: var(--muted); font-size: 22px; line-height: 1; padding: 4px 8px; }
+.detail-cover { display: block; width: calc(100% + 32px); margin: -16px -16px 6px; aspect-ratio: 16 / 9; object-fit: cover; object-position: center 30%; border-radius: 16px 16px 0 0; background: var(--line); }
+.detail.hascover .x { z-index: 1; background: rgba(13,20,22,.55); color: #fff; border-radius: 999px; padding: 2px 9px 4px; }
+.cthumb { width: 44px; height: 44px; flex: none; border-radius: 10px; object-fit: cover; background: var(--line); }
+.coverpick { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 12px; cursor: pointer; margin: 8px 0; }
+.coverpick small { display: block; color: var(--muted); font-size: 12px; }
+.coverpick .cp-icon { font-size: 20px; }
+.coverpick.has { border-style: solid; padding: 6px; cursor: default; }
+.coverpick.has img { width: 96px; height: 54px; object-fit: cover; border-radius: 8px; }
+label.mini { display: inline-flex; align-items: center; cursor: pointer; }
 .detail-photo { width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; margin-top: 6px; }
 .kicker { font-family: var(--f-data); font-size: 11px; letter-spacing: .06em; font-weight: 500; }
 .lockline { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: flex-start; margin-top: 4px; }

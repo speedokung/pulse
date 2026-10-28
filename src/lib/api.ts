@@ -1,7 +1,7 @@
 import { SUBS, subByKey } from "./categories";
 // One data layer for both modes: Supabase when configured, the in-memory demo otherwise.
 import type { ActivityItem, Category, ChatMessage, Contact, FeedPost, FollowingItem, FollowRequest, FollowStatus, LatLng, MemberStatus, NewPulse, PostKind, ProfileSummary, PublicProfile, Pulse, Signal } from "./types";
-import { configured, supabase, PHOTO_BUCKET } from "./supabase";
+import { configured, supabase, PHOTO_BUCKET, photoUrl } from "./supabase";
 import * as demo from "./demo";
 import { getLang } from "./i18n";
 import { DAY, MIN } from "./pulse";
@@ -87,7 +87,26 @@ export async function createPulse(np: NewPulse): Promise<string> {
   if (error) throw error;
   const id = data as string;
   if (np.contact.line_id || np.contact.phone || np.contact.landmark) await setContact(id, np.contact);
+  if (np.cover) await setPulseCover(id, np.cover).catch((e) => console.warn("cover upload failed", e));
   return id;
+}
+
+/** The Pulse's cover image address, if it has one. */
+export const coverSrc = (p: Pulse) => p.local_cover || (p.cover_path ? photoUrl(p.cover_path) : null);
+
+/** Host sets (file) or removes (null) the cover photo. */
+export async function setPulseCover(id: string, file: File | null) {
+  if (!configured) return demo.demoSetCover(id, file);
+  let path: string | null = null;
+  if (file) {
+    const uid = (await supabase.auth.getSession()).data.session?.user.id;
+    if (!uid) throw new Error("Please sign in first");
+    path = `${uid}/covers/${id}-${Date.now()}.jpg`;
+    const up = await supabase.storage.from(PHOTO_BUCKET).upload(path, await shrink(file), { contentType: "image/jpeg" });
+    if (up.error) throw up.error;
+  }
+  const { error } = await supabase.rpc("set_pulse_cover", { p_id: id, p_path: path });
+  if (error) throw error;
 }
 export async function setContact(id: string, c: Contact) {
   if (!configured) return demo.demoSetContact(id, c);

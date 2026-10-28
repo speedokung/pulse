@@ -215,7 +215,7 @@ async function lineLink(req: Request, env: Env): Promise<Response> {
 
 /* ---------------- notifications ---------------- */
 
-interface PulseRow { id: string; host_id: string; category: string; title: string; need: number; starts_at: string; ends_at: string; area_name: string; rough_lat: number; rough_lng: number; level?: string }
+interface PulseRow { cover_path?: string | null; id: string; host_id: string; category: string; title: string; need: number; starts_at: string; ends_at: string; area_name: string; rough_lat: number; rough_lng: number; level?: string }
 const CAT_TH: Record<string, string> = { sport: "กีฬา", music: "ดนตรี", games: "บอร์ดเกม", outdoor: "กลางแจ้ง", make: "งานศิลป์" };
 const CAT_COLOR: Record<string, string> = { sport: "#e8590c", music: "#c2255c", games: "#6741d9", outdoor: "#2b8a3e", make: "#0b7285" };
 
@@ -358,7 +358,7 @@ async function withPreview(req: Request, env: Env, id: string | null): Promise<R
   if (!id || !/^[0-9a-f-]{36}$/i.test(id) || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return page;
   let p: PulseRow | undefined;
   try {
-    p = ((await sb(env, `pulses?id=eq.${id}&select=id,title,area_name,starts_at,ends_at,category,need`, {}, false)) as PulseRow[])[0];
+    p = ((await sb(env, `pulses?id=eq.${id}&select=id,title,area_name,starts_at,ends_at,category,need,cover_path`, {}, false)) as PulseRow[])[0];
   } catch { return page; }
   if (!p) return page;
   const ended = new Date(p.ends_at).getTime() < Date.now();
@@ -371,5 +371,6 @@ async function withPreview(req: Request, env: Env, id: string | null): Promise<R
     .on('meta[property="og:title"]', set(title))
     .on('meta[property="og:description"]', set(desc))
     .on('meta[name="description"]', set(desc))
+    .on('meta[property="og:image"]', p.cover_path ? set(`${env.SUPABASE_URL}/storage/v1/object/public/feed-photos/${p.cover_path.split("/").map(encodeURIComponent).join("/")}`) : { element() {} })
     .transform(page);
 }

@@ -67,6 +67,9 @@ export function DropPulse({ pin, me, prefill, hidden, collapsed, onCollapse, onM
   const [landmark, setLandmark] = useState(draft?.landmark ?? "");
   const [area, setArea] = useState("…");
   const [busy, setBusy] = useState(false);
+  const [cover, setCover] = useState<File | null>(null);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  useEffect(() => { if (!cover) { setCoverUrl(null); return; } const u = URL.createObjectURL(cover); setCoverUrl(u); return () => URL.revokeObjectURL(u); }, [cover]);
   const titleRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (!draft) titleRef.current?.focus(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { let dead = false; setArea("…"); areaName(pin).then((a) => { if (!dead) setArea(a); }); return () => { dead = true; }; }, [pin.lat, pin.lng]);
@@ -196,7 +199,7 @@ export function DropPulse({ pin, me, prefill, hidden, collapsed, onCollapse, onM
     const ok = await onSubmit({
       category, title: title.trim(), need, startInMin: Math.max(0, Math.round((startAt - Date.now()) / MIN)), durationMin: durMin,
       visibility: vis, lat: pin.lat, lng: pin.lng, place: place.trim(), area: area === "…" ? "Nearby" : area,
-      level, repeatWeeks: repeat, sub,
+      level, repeatWeeks: repeat, sub, cover,
       contact: { line_id: lineId.trim().replace(/^@?/, "") || null, phone: phone.trim() || null, landmark: landmark.trim() || null },
     });
     setBusy(false);
@@ -244,6 +247,17 @@ export function DropPulse({ pin, me, prefill, hidden, collapsed, onCollapse, onM
         </div>
         <input ref={titleRef} type="text" id="f-title" className="titlein" maxLength={80} required minLength={3} value={title}
           onChange={(e) => setTitle(e.target.value)} placeholder={t("fWhatPh")} aria-label={t("fWhat")} />
+        {coverUrl ? (
+          <div className="coverpick has">
+            <img src={coverUrl} alt="" />
+            <button type="button" className="mini" onClick={() => setCover(null)}>{t("fCoverRemove")}</button>
+          </div>
+        ) : (
+          <label className="coverpick">
+            <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setCover(f); e.target.value = ""; }} />
+            <span className="cp-icon" aria-hidden="true">🖼️</span><span><b>{t("fCoverAdd")}</b><small>{t("fCoverHint")}</small></span>
+          </label>
+        )}
         <div className="stepper" role="group" aria-label={t("fNeed")}>
           <span>{t("fNeedShort")}</span>
           <button type="button" onClick={() => setNeed(Math.max(1, need - 1))} aria-label="−" disabled={need <= 1}>−</button>

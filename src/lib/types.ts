@@ -52,6 +52,10 @@ export interface Pulse {
   series_id?: string | null;
   sub?: string | null;
   pulse_signals?: Signal[];
+  /** Cover photo (storage path in the feed-photos bucket), set by the host. */
+  cover_path?: string | null;
+  /** Demo mode only: a local preview of the cover. */
+  local_cover?: string;
 }
 
 export interface Contact { line_id: string | null; phone: string | null; landmark: string | null }
@@ -86,4 +90,6 @@ export interface NewPulse {
   level: Level;
   repeatWeeks: number;
   sub: string | null;
+  /** Optional cover photo picked in the form. */
+  cover?: File | null;
 }

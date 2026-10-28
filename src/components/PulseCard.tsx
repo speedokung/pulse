@@ -4,13 +4,14 @@ import { distanceM } from "../lib/geo";
 import { dist, walkMin } from "../lib/format";
 import { Actions, Glyph, HostLine, JoinButton, NavButton, Place, Seats, SignalSummary, signalsOf, Tags, When } from "./ui";
 import { t } from "../lib/i18n";
+import { coverSrc } from "../lib/api";
 
 export function PulseCard({ p, uid, me, sel, a }: { p: Pulse; uid: string | null; me: LatLng; sel: boolean; a: Actions }) {
   const d = distanceM(me, pos(p)), past = isOver(p);
   return (
     <div className={`card${past ? " past" : ""}${sel ? " sel" : ""}`} onClick={() => a.select(p.id)} role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter") a.select(p.id); }}>
-      <Glyph p={p} />
+      {coverSrc(p) ? <img className="cthumb" src={coverSrc(p)!} alt="" loading="lazy" /> : <Glyph p={p} />}
       <div className="cbody">
         <p className="ctitle">{p.title} <Tags p={p} /></p>
         <div className="meta"><When p={p} /></div>

@@ -571,3 +571,20 @@ create table if not exists public.ig_state (
 alter table public.ig_posts enable row level security;
 alter table public.ig_state enable row level security;
 -- no policies: only the service role (the Worker) can read or write these
+
+-- ---------- cover photo for a Pulse ----------
+-- The image lives in the public feed-photos bucket under <host uid>/covers/…; the host sets or clears it.
+-- A weekly series shares one cover (set on any of its Pulses, it applies to the ones not over yet).
+alter table public.pulses add column if not exists cover_path text check (cover_path is null or char_length(cover_path) <= 200);
+
+create or replace function public.set_pulse_cover(p_id uuid, p_path text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); p pulses;
+begin
+  select * into p from pulses where id = p_id;
+  if p.id is null or p.host_id is distinct from v_uid then raise exception 'Only the host can change the cover'; end if;
+  if p_path is not null and p_path not like v_uid::text || '/covers/%' then raise exception 'Bad cover path'; end if;
+  update pulses set cover_path = p_path
+   where host_id = v_uid and (id = p_id or (p.series_id is not null and series_id = p.series_id and ends_at > now()));
+end $$;
+grant execute on function public.set_pulse_cover(uuid, text) to authenticated;
