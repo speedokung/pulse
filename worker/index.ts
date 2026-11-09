@@ -380,7 +380,7 @@ async function withPreview(req: Request, env: Env, id: string | null): Promise<R
   if (!id || !/^[0-9a-f-]{36}$/i.test(id) || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return page;
   let p: PulseRow | undefined;
   try {
-    p = ((await sb(env, `pulses?id=eq.${id}&select=id,title,area_name,starts_at,ends_at,category,need,cover_path,card_path`, {}, false)) as PulseRow[])[0];
+    p = ((await sb(env, `pulses?id=eq.${id}&select=*`, {}, false)) as PulseRow[])[0];
   } catch { return page; }
   if (!p) return page;
   const ended = new Date(p.ends_at).getTime() < Date.now();
