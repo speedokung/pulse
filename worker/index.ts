@@ -17,9 +17,20 @@
 import { igTick } from "./instagram";
 import { fbTick, fbCheck } from "./facebook";
 import { seoPage, sitemap } from "./seo";
+import { threadsTick, threadsCheck } from "./threads";
+import { ytAuth, ytTick, ytCheck } from "./youtube";
+import { storyPage, storyTick } from "./story";
 import { igCheck } from "./instagram";
 
 export interface Env {
+  THREADS_USER_ID?: string;
+  THREADS_TOKEN?: string;
+  THREADS_PAUSED?: string;
+  YT_CLIENT_ID?: string;
+  YT_CLIENT_SECRET?: string;
+  YT_PAUSED?: string;
+  BROWSER?: Fetcher;
+  STORY_PAUSED?: string;
   IG_USER_ID?: string;
   IG_ACCESS_TOKEN?: string;
   IG_PAUSED?: string;
@@ -45,6 +56,9 @@ export default {
   async scheduled(_ev: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(igTick(env).then((l) => console.log("ig:", l.join(" | "))).catch((e) => console.log("ig error:", (e as Error).message)));
     ctx.waitUntil(fbTick(env).then((l) => console.log("fb:", l.join(" | "))).catch((e) => console.log("fb error:", (e as Error).message)));
+    ctx.waitUntil(threadsTick(env).then((l) => console.log("threads:", l.join(" | "))).catch((e) => console.log("threads error:", (e as Error).message)));
+    ctx.waitUntil(ytTick(env).then((l) => console.log("yt:", l.join(" | "))).catch((e) => console.log("yt error:", (e as Error).message)));
+    ctx.waitUntil(storyTick(env).then((l) => console.log("story:", l.join(" | "))).catch((e) => console.log("story error:", (e as Error).message)));
   },
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
@@ -59,19 +73,24 @@ export default {
         if (!env.WEBHOOK_SECRET || req.headers.get("x-webhook-secret") !== env.WEBHOOK_SECRET) return json({ error: "forbidden" }, 403);
         const dryRun = url.searchParams.get("dry") === "1";
         const run = (f: () => Promise<string[]>) => f().catch((e) => [`error: ${(e as Error).message}`]);
-        return json({ log: await run(() => igTick(env, { dryRun })), fb: await run(() => fbTick(env, { dryRun })) });
+        const only = url.searchParams.get("only");
+        if (only === "story") return json({ story: await run(() => storyTick(env, { dryRun, force: true })) });
+        return json({ log: await run(() => igTick(env, { dryRun })), fb: await run(() => fbTick(env, { dryRun })),
+          threads: await run(() => threadsTick(env, { dryRun })), youtube: await run(() => ytTick(env, { dryRun })), story: await run(() => storyTick(env, { dryRun: true, force: true })) });
       }
       // is posting set up? (public names only; cached 10 min so it can't be used to burn API calls)
       if (url.pathname === "/api/social/status") {
         const cache = caches.default, key = new Request(`${url.origin}/api/social/status`);
         const hit = await cache.match(key);
         if (hit && !url.searchParams.has("fresh")) return hit;
-        const res = json({ instagram: await igCheck(env), facebook: await fbCheck(env), checked_at: new Date().toISOString() }, 200, { "cache-control": "public, max-age=600" });
+        const res = json({ instagram: await igCheck(env), facebook: await fbCheck(env), threads: await threadsCheck(env), youtube: await ytCheck(env), checked_at: new Date().toISOString() }, 200, { "cache-control": "public, max-age=600" });
         ctx.waitUntil(cache.put(key, res.clone()));
         return res;
       }
+      if (url.pathname === "/api/yt/connect" || url.pathname === "/api/yt/callback") return await ytAuth(url, env);
       if (url.pathname.startsWith("/api/")) return json({ error: "not found" }, 404);
       if (url.pathname === "/sitemap.xml") return await sitemap(env);
+      if (url.pathname === "/story/today") return await storyPage(env, url.searchParams.get("sample") === "1");
       if (/^\/(th|en)(\/|$)/.test(url.pathname)) { const r = await seoPage(url, env); return r ?? new Response("Not found", { status: 404 }); }
       if (url.pathname === "/") return await withPreview(req, env, url.searchParams.get("p"));
     } catch (e) {

@@ -77,7 +77,7 @@ export async function igTick(env: IgEnv, opts: { dryRun?: boolean } = {}): Promi
   const qr = await env.ASSETS.fetch(new Request(`${base}/ig/queue.json`));
   if (!qr.ok) return ["no queue.json"];
   const queue = ((await qr.json()) as { posts: QueueItem[] }).posts;
-  const rows = ((await db(env, "ig_posts?select=*")) as PostRow[]).filter((r) => !r.id.startsWith("fb:")); // fb: rows belong to facebook.ts
+  const rows = ((await db(env, "ig_posts?select=*")) as PostRow[]).filter((r) => !/^[a-z]+:/.test(r.id)); // "fb:", "th:", "yt:", "story:" rows belong to the other posters
   const byId = new Map(rows.map((r) => [r.id, r]));
   const tok = await token(env, log);
   if (!tok) return [...log, "no token"];

@@ -2,11 +2,12 @@
   "name": "pulse",
   "main": "worker/index.ts",
   "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/", "/th", "/th/*", "/en", "/en/*", "/sitemap.xml"]
+    "run_worker_first": ["/api/*", "/", "/th", "/th/*", "/en", "/en/*", "/sitemap.xml", "/story/*"]
   },
   // Public settings the Worker reads at runtime (all of these are safe to be public).
   // Secrets (SUPABASE_SERVICE_ROLE_KEY, LINE_MESSAGING_TOKEN, WEBHOOK_SECRET) are NOT here:
@@ -27,5 +28,7 @@
   ],
   // Instagram auto-poster: every 20 minutes (one small step per run)
   "triggers": { "crons": ["*/20 * * * *"] },
+  // Cloudflare Browser Rendering (free: 10 min/day) — draws the daily "ก๊วนวันนี้" Story picture
+  "browser": { "binding": "BROWSER" },
   "observability": { "enabled": true }
 }
