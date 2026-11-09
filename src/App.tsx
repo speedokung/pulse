@@ -249,10 +249,17 @@ export default function App() {
     if (placing === "me") { loc.setManual(ll); setPlacing(null); toast(t("spotSet")); return; }
     if (drop) { setDrop({ ...drop, pin: ll }); setPlacing(null); } // the sheet stays slid down so they can keep adjusting
   };
+  const [inviteFor, setInviteFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!inviteFor) return;
+    const p = data.pulses.find((q) => q.id === inviteFor);
+    if (p) { setShare(p); setInviteFor(null); }
+  }, [inviteFor, data.pulses]);
   const submitDrop = async (np: Parameters<typeof createPulse>[0]) => {
     try {
       const id = await createPulse(np);
       setDrop(null); setDropDown(false); toast(np.startInMin <= 1 ? t("tLiveNow") : t("tScheduled")); await data.reload(); setSel(id);
+      setInviteFor(id);   // straight to "ชวนเพื่อน": every new ก๊วน is a chance to bring people in
       return true;
     } catch (e) { toast(errText(e)); return false; }
   };

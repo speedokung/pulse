@@ -588,3 +588,17 @@ begin
    where host_id = v_uid and (id = p_id or (p.series_id is not null and series_id = p.series_id and ends_at > now()));
 end $$;
 grant execute on function public.set_pulse_cover(uuid, text) to authenticated;
+
+-- ---------- link-preview card for a Pulse ----------
+-- Drawn in the host's browser (title, time, area, cover) and stored next to the cover; the Worker uses it as og:image.
+alter table public.pulses add column if not exists card_path text check (card_path is null or char_length(card_path) <= 200);
+
+create or replace function public.set_pulse_card(p_id uuid, p_path text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid();
+begin
+  if not exists (select 1 from pulses where id = p_id and host_id = v_uid) then raise exception 'Only the host can set the card'; end if;
+  if p_path is not null and p_path not like v_uid::text || '/cards/%' then raise exception 'Bad card path'; end if;
+  update pulses set card_path = p_path where id = p_id;
+end $$;
+grant execute on function public.set_pulse_card(uuid, text) to authenticated;

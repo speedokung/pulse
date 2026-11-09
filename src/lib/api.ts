@@ -88,7 +88,32 @@ export async function createPulse(np: NewPulse): Promise<string> {
   const id = data as string;
   if (np.contact.line_id || np.contact.phone || np.contact.landmark) await setContact(id, np.contact);
   if (np.cover) await setPulseCover(id, np.cover).catch((e) => console.warn("cover upload failed", e));
+  else void refreshPulseCard(id);
   return id;
+}
+
+/** Draw the ก๊วน's link-preview card and store it, so shared links show this ก๊วน (best effort). */
+export async function refreshPulseCard(id: string, coverFile?: File | null) {
+  if (!configured) return;
+  try {
+    const { data: p } = await supabase.from("pulses").select(PULSE_SELECT).eq("id", id).single();
+    if (!p) return;
+    let cover: CanvasImageSource | null = null;
+    if (coverFile) cover = await createImageBitmap(coverFile);
+    else if ((p as Pulse).cover_path) {
+      const im = new Image(); im.crossOrigin = "anonymous"; im.src = photoUrl((p as Pulse).cover_path!);
+      cover = await im.decode().then(() => im, () => null);
+    }
+    const { drawOg } = await import("./shareCard");
+    const canvas = await drawOg(p as Pulse, cover);
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.86));
+    const uid = (await supabase.auth.getSession()).data.session?.user.id;
+    if (!blob || !uid) return;
+    const path = `${uid}/cards/${id}-${Date.now()}.jpg`;
+    const up = await supabase.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: "image/jpeg" });
+    if (up.error) return;
+    await supabase.rpc("set_pulse_card", { p_id: id, p_path: path });
+  } catch (e) { console.warn("card failed", e); }
 }
 
 /** The Pulse's cover image address, if it has one. */
@@ -107,6 +132,7 @@ export async function setPulseCover(id: string, file: File | null) {
   }
   const { error } = await supabase.rpc("set_pulse_cover", { p_id: id, p_path: path });
   if (error) throw error;
+  void refreshPulseCard(id, file);
 }
 export async function setContact(id: string, c: Contact) {
   if (!configured) return demo.demoSetContact(id, c);

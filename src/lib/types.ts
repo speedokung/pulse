@@ -54,6 +54,8 @@ export interface Pulse {
   pulse_signals?: Signal[];
   /** Cover photo (storage path in the feed-photos bucket), set by the host. */
   cover_path?: string | null;
+  /** Link-preview card (storage path), drawn by the app. */
+  card_path?: string | null;
   /** Demo mode only: a local preview of the cover. */
   local_cover?: string;
 }

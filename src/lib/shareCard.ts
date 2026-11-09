@@ -80,6 +80,37 @@ export async function drawCard(p: Pulse, lang: Lang = "th"): Promise<HTMLCanvasE
   return c;
 }
 
+/** 1200×630 link-preview card for a ก๊วน (what LINE / Facebook / X show when the link is shared). */
+export async function drawOg(p: Pulse, cover?: CanvasImageSource | null): Promise<HTMLCanvasElement> {
+  await document.fonts?.ready;
+  const W = 1200, H = 630, c = document.createElement("canvas"); c.width = W; c.height = H;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = CATS[p.category].color; ctx.fillRect(0, 0, W, H);
+  if (cover) {
+    const cw = (cover as HTMLImageElement).width || W, ch = (cover as HTMLImageElement).height || H;
+    const s = Math.max(W / cw, H / ch);
+    ctx.drawImage(cover, (W - cw * s) / 2, (H - ch * s) / 2, cw * s, ch * s);
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgba(13,20,22,.25)"); g.addColorStop(1, "rgba(13,20,22,.88)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  } else {
+    ctx.strokeStyle = "rgba(255,255,255,.12)"; ctx.lineWidth = 3;
+    for (let r = 100; r < 900; r += 100) { ctx.beginPath(); ctx.arc(W - 140, 150, r, 0, 7); ctx.stroke(); }
+  }
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath(); ctx.arc(76, 74, 13, 0, 7); ctx.fill();
+  ctx.font = `700 46px ${FT}`; ctx.fillText("แถว", 100, 90);
+  ctx.font = `600 32px ${FT}`; ctx.fillStyle = "rgba(255,255,255,.9)";
+  ctx.fillText(`${CATS[p.category].th} · แถว${p.area_name}`, 60, 300);
+  ctx.font = `800 76px ${FD}`; ctx.fillStyle = "#ffffff";
+  const tl = wrap(ctx, p.title, W - 120).slice(0, 2);
+  tl.forEach((l, i) => ctx.fillText(l, 60, 390 + i * 88));
+  ctx.font = `600 34px ${FB}`; ctx.fillStyle = "rgba(255,255,255,.92)";
+  inLang("th", () => ctx.fillText(`เริ่ม ${dayClock(p.starts_at)} · กดเพื่อจอย`, 60, 390 + tl.length * 88 + 20));
+  ctx.fillStyle = "#ff5a36"; rrect(ctx, W - 290, H - 104, 230, 64, 32); ctx.fill();
+  ctx.fillStyle = "#14211f"; ctx.font = `700 30px ${FB}`; ctx.textAlign = "center"; ctx.fillText("thaew.com", W - 175, H - 61); ctx.textAlign = "left";
+  return c;
+}
+
 export async function drawPoster(): Promise<HTMLCanvasElement> {
   await document.fonts?.ready;
   const W = 1240, H = 1754, c = document.createElement("canvas"); c.width = W; c.height = H;
