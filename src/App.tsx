@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Category, LatLng, Pulse } from "./lib/types";
-import { CAT_KEYS, CATS, catName, RADII, RadiusKey, subsOf } from "./lib/categories";
+import { CAT_KEYS, CATS, catName, RADII, RadiusKey, subByKey, subsOf } from "./lib/categories";
 import { configured } from "./lib/supabase";
 import { createPulse, endPulse, extendPulse, hostStats, sendMessage, setContact, setSignal, errText, joinPulse, leavePulse, postToFeed, setPulseCover, respondRequest, searchHistory } from "./lib/api";
 import { accepted, DAY, isOver, ms, pos, status } from "./lib/pulse";
@@ -174,11 +174,31 @@ export default function App() {
     toast(t("fShared"));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // home-screen shortcut "ตั้งก๊วน" (?new=1)
+  // links from the search pages (/th/badminton/ladprao …): ?sub=badminton&at=lat,lng → that spot, that activity
+  const landing = useRef((() => {
+    const q = new URLSearchParams(location.search), m = (q.get("at") || "").match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
+    return { at: m ? { lat: +m[1], lng: +m[2] } : null, sub: subByKey(q.get("sub")) };
+  })());
+  useEffect(() => {
+    const { at, sub } = landing.current;
+    if (!at && !sub) return;
+    if (at) { loc.setManual(at); setCenterOn({ ll: at, k: Date.now() }); }
+    if (sub) { setCats(new Set([sub.cat])); setSubF(sub.k); }
+    if (new URLSearchParams(location.search).get("new") !== "1") history.replaceState(null, "", "/");
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // home-screen shortcut "ตั้งก๊วน" (?new=1), also from the search pages with an activity and a spot
   useEffect(() => {
     if (new URLSearchParams(location.search).get("new") !== "1") return;
     history.replaceState(null, "", "/");
-    setTimeout(() => openDrop(), 300);
+    const { at, sub } = landing.current;
+    setTimeout(() => {
+      if (!at && !sub) { openDrop(); return; }
+      if (needName(t("whyHost"))) return;
+      setSel(null); setDropDown(false);
+      setDrop({ pin: at ?? loc.me, prefill: sub ? { category: sub.cat, sub: sub.k, need: sub.need, title: getLang() === "th" ? sub.titleTh : sub.titleEn } : null, k: Date.now() });
+      if (window.innerWidth < 820) setTab("map");
+    }, 300);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // opened inside LINE to link this LINE account (?link=<code>)

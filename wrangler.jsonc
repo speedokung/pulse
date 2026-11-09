@@ -6,7 +6,7 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/"]
+    "run_worker_first": ["/api/*", "/", "/th", "/th/*", "/en", "/en/*", "/sitemap.xml"]
   },
   // Public settings the Worker reads at runtime (all of these are safe to be public).
   // Secrets (SUPABASE_SERVICE_ROLE_KEY, LINE_MESSAGING_TOKEN, WEBHOOK_SECRET) are NOT here:

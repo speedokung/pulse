@@ -5,3 +5,4 @@ User-agent: *
 Allow: /
 Disallow: /ig/
 
+Sitemap: https://thaew.com/sitemap.xml

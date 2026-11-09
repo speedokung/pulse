@@ -16,6 +16,7 @@
 
 import { igTick } from "./instagram";
 import { fbTick, fbCheck } from "./facebook";
+import { seoPage, sitemap } from "./seo";
 import { igCheck } from "./instagram";
 
 export interface Env {
@@ -70,6 +71,8 @@ export default {
         return res;
       }
       if (url.pathname.startsWith("/api/")) return json({ error: "not found" }, 404);
+      if (url.pathname === "/sitemap.xml") return await sitemap(env);
+      if (/^\/(th|en)(\/|$)/.test(url.pathname)) { const r = await seoPage(url, env); return r ?? new Response("Not found", { status: 404 }); }
       if (url.pathname === "/") return await withPreview(req, env, url.searchParams.get("p"));
     } catch (e) {
       return json({ error: (e as Error).message || "error" }, 500);
@@ -371,6 +374,13 @@ async function withPreview(req: Request, env: Env, id: string | null): Promise<R
     .on('meta[property="og:title"]', set(title))
     .on('meta[property="og:description"]', set(desc))
     .on('meta[name="description"]', set(desc))
+    .on("head", { element(e) {
+      if (ended) return;   // a ก๊วน coming up is an event: lets search engines show it
+      e.append(`<script type="application/ld+json">${JSON.stringify({ "@context": "https://schema.org", "@type": "Event", name: p!.title, startDate: p!.starts_at, endDate: p!.ends_at,
+        eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode", eventStatus: "https://schema.org/EventScheduled", isAccessibleForFree: true,
+        location: { "@type": "Place", name: p!.area_name, address: { "@type": "PostalAddress", addressLocality: p!.area_name, addressCountry: "TH" } },
+        organizer: { "@type": "Organization", name: "แถว Thaew", url: "https://thaew.com" }, url: `https://thaew.com/?p=${p!.id}`, description: desc }).replace(/</g, "\\u003c")}</script>`, { html: true });
+    } })
     .on('meta[property="og:image"]', (p.card_path || p.cover_path) ? set(`${env.SUPABASE_URL}/storage/v1/object/public/feed-photos/${(p.card_path || p.cover_path)!.split("/").map(encodeURIComponent).join("/")}`) : { element() {} })
     .transform(page);
 }
