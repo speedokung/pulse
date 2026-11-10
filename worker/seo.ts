@@ -117,6 +117,8 @@ const UI = {
 
 interface Row { id: string; title: string; category: Cat; sub: string | null; starts_at: string; ends_at: string; area_name: string; rough_lat: number; rough_lng: number; need: number }
 
+// Cloudflare Web Analytics (cookieless page views); same token as index.html
+const BEACON = `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "51b9996e7a2e4fdba006026c94885ad7"}'></script>`;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const km = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
   const R = 6371, dLat = ((b.lat - a.lat) * Math.PI) / 180, dLng = ((b.lng - a.lng) * Math.PI) / 180;
@@ -163,7 +165,7 @@ ol{padding-left:20px}dt{font-weight:700;margin-top:10px}dd{margin:0;color:var(--
 ${o.ld.map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, "\\u003c")}</script>`).join("")}
 </head><body><main><div class="top"><a class="brand" href="/${o.lang}"><i></i>แถว</a><a href="${o.alt}">${esc(UI[o.lang].switch)}</a></div>
 <h1>${esc(o.h1)}</h1><p class="lead">${esc(o.lead)}</p>${o.body}
-<footer><a href="/">thaew.com</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></footer></main></body></html>`;
+<footer><a href="/">thaew.com</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></footer></main>${BEACON}</body></html>`;
 }
 
 function list(ps: Row[], lang: Lang) {
