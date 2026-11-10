@@ -4,7 +4,7 @@
 // Status per post lives in Supabase ig_posts as "th:<post id>"; the token is refreshed weekly (ig_state key "threads_token").
 //
 // Settings (Cloudflare → Worker → Variables and Secrets):
-//   THREADS_USER_ID  text    the Threads profile id
+//   THREADS_USER_ID  text    optional: the Threads profile id (otherwise taken from the token)
 //   THREADS_TOKEN    secret  long-lived Threads user token (only used until the first refresh is stored)
 //   THREADS_PAUSED   text    "1" stops Threads posting
 
@@ -51,12 +51,18 @@ export function threadsText(q: QueueItem): string {
   return cps.length > 490 ? cps.slice(0, 487).join("") + "…" : t;
 }
 
+/** THREADS_USER_ID if set, otherwise whoever the token belongs to. */
+async function userId(env: ThEnv, tok: string) {
+  return env.THREADS_USER_ID || ((await th("me", { fields: "id" }, tok, "GET")) as { id: string }).id;
+}
+
 export async function threadsTick(env: ThEnv, opts: { dryRun?: boolean } = {}): Promise<string[]> {
   const log: string[] = [];
   if (env.THREADS_PAUSED === "1") return ["paused"];
-  if (!env.THREADS_USER_ID || !env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return ["not set up: THREADS_USER_ID missing"];
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return ["not set up: Supabase settings missing"];
   const tok = await token(env, log);
   if (!tok) return [...log, "not set up: THREADS_TOKEN missing"];
+  env = { ...env, THREADS_USER_ID: await userId(env, tok) };
   const base = (env.APP_URL || "https://thaew.com").replace(/\/$/, "");
   const qr = await env.ASSETS.fetch(new Request(`${base}/ig/queue.json`));
   if (!qr.ok) return ["no queue.json"];
@@ -110,11 +116,10 @@ export async function threadsTick(env: ThEnv, opts: { dryRun?: boolean } = {}): 
 
 export async function threadsCheck(env: ThEnv): Promise<Record<string, unknown>> {
   try {
-    if (!env.THREADS_USER_ID) return { ok: false, error: "THREADS_USER_ID missing" };
     if (!env.SUPABASE_SERVICE_ROLE_KEY) return { ok: false, error: "Supabase settings missing" };
     const tok = await token(env, []);
     if (!tok) return { ok: false, error: "THREADS_TOKEN missing" };
     const me = (await th("me", { fields: "id,username" }, tok, "GET")) as { id?: string; username?: string };
-    return { ok: true, username: me.username, id_matches: me.id === env.THREADS_USER_ID, paused: env.THREADS_PAUSED === "1" };
+    return { ok: true, username: me.username, user_id: me.id, paused: env.THREADS_PAUSED === "1" };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
