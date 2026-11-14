@@ -173,7 +173,11 @@ function fitAll() {
     const max = el.matches('.caption span') ? 940 : el.matches('.end .t1, .end .t2') ? 960 : 860;
     const sc = el.closest('.scene'); const vis = sc.style.visibility; sc.style.visibility = 'visible';
     let fs = parseFloat(getComputedStyle(el).fontSize);
-    while (el.scrollWidth > max && fs > 30) { fs -= 3; el.style.fontSize = fs + 'px'; }
+    // the end titles are full-width blocks: measure the text itself, not the box
+    const block = el.matches('.end .t1, .end .t2'); if (block) { el.style.width = 'max-content'; el.style.whiteSpace = 'nowrap'; }
+    const w = () => block ? el.offsetWidth : el.scrollWidth;
+    while (w() > max && fs > 30) { fs -= 3; el.style.fontSize = fs + 'px'; }
+    if (block) el.style.width = '';
     sc.style.visibility = vis;
   });
 }

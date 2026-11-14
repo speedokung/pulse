@@ -105,7 +105,7 @@ def pick_cuts(gaps, texts, total):
     for k in range(n - 1, -1, -1): out.append(gaps[j]); j = prev[k][j]
     return out[::-1]
 
-def gemini_script(lines, voice, style):
+def gemini_script(lines, voice, style, cuts_at=None):
     """All of a Reel's lines in ONE Gemini request (the free tier allows ~10 requests a day), split back
     into one trimmed wav per line at the longest pauses. Returns [(path, seconds)] in line order."""
     name = voice.split(":", 1)[1]
@@ -119,8 +119,11 @@ def gemini_script(lines, voice, style):
     if len(gaps) < len(texts) - 1:
         os.remove(raw)
         sys.exit(f"could only find {len(gaps)} pauses for {len(texts)} lines — run again (one more request)")
-    cuts = pick_cuts(gaps, texts, total)
-    bounds = [0.0] + [(a + b) / 2 for a, b in cuts] + [total]
+    if cuts_at:   # "vo_cuts" in the clip script: split times (s) in the raw take, set by ear/envelope when the pauses mislead
+        bounds = [0.0] + list(cuts_at) + [total]
+    else:
+        cuts = pick_cuts(gaps, texts, total)
+        bounds = [0.0] + [(a + b) / 2 for a, b in cuts] + [total]
     out = []
     for i, (t, text, slot) in enumerate(lines):
         piece = os.path.join(HERE, "cache", "vo", f"{key}-{i}.wav")
@@ -179,7 +182,7 @@ def main(name):
     voice = spec.get("voice", "th-TH-PremwadeeNeural")
     vo = spec.get("vo", [])
     if voice.startswith("gemini:") and vo:
-        lines = [(t, *got) for (t, _, _), got in zip(vo, gemini_script(vo, voice, spec.get("style") or DEFAULT_STYLE))]
+        lines = [(t, *got) for (t, _, _), got in zip(vo, gemini_script(vo, voice, spec.get("style") or DEFAULT_STYLE, spec.get("vo_cuts")))]
     else:
         lines = [(t, *say(text, voice, slot, spec.get("style"))) for t, text, slot in vo]
     music = spec.get("music") or {}

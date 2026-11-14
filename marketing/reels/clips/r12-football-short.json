@@ -1,0 +1,122 @@
+{
+  "name": "r12-football-short",
+  "fps": 30,
+  "brand": "แถว",
+  "screens": "screens",
+  "caption": "อีกชั่วโมงเตะ ทีมขาดสาม ไม่ต้องไล่ทักเพื่อนทีละคน ตั้งก๊วนบน thaew.com บอกว่าขาดกี่คน คนแถวสนามเห็นทันที\n\n#แถว #หาเพื่อนเล่น #ฟุตบอล #บอล7คน #หาทีมเตะบอล",
+  "scenes": [
+    {
+      "type": "text",
+      "dur": 3.2,
+      "bg": {
+        "clip": "C2",
+        "from": 0.2
+      },
+      "kicker": "อีก 1 ชม. เตะ",
+      "lines": [
+        "ทีมขาด 3"
+      ],
+      "highlight": [
+        0
+      ]
+    },
+    {
+      "type": "text",
+      "dur": 4.0,
+      "bg": {
+        "green": {
+          "clip": "D1",
+          "from": 0.6,
+          "screens": [
+            [
+              0,
+              "screens-tall-football/01-map.png"
+            ],
+            [
+              2.2,
+              "screens-tall-football/03-form-sub.png"
+            ]
+          ]
+        }
+      },
+      "enter": "cut",
+      "shade": "light",
+      "caption": "ตั้งก๊วน · <b>ขาดอีก 3</b>"
+    },
+    {
+      "type": "text",
+      "dur": 3.0,
+      "bg": {
+        "clip": "B2b",
+        "from": 0.2
+      },
+      "enter": "cut",
+      "lines": [
+        "คนแถวสนาม",
+        "เห็นทันที"
+      ],
+      "highlight": [
+        1
+      ]
+    },
+    {
+      "type": "text",
+      "dur": 2.6,
+      "bg": {
+        "clip": "B3a",
+        "from": 1.6
+      },
+      "enter": "cut",
+      "shade": "light",
+      "label": "ครบทีม"
+    },
+    {
+      "type": "end",
+      "dur": 3.2,
+      "logo": "assets/logo.png",
+      "title": "ขาดกี่คน",
+      "title2": "บอกแถวนี้",
+      "url": "thaew.com",
+      "sub": "ไม่ต้องโหลดแอป · ไม่ต้องสมัคร",
+      "stagger": 0.18
+    }
+  ],
+  "voice": "gemini:Achird",
+  "vo": [
+    [
+      0.15,
+      "อีกชั่วโมงเตะ แต่ทีมขาดสาม",
+      2.85
+    ],
+    [
+      3.35,
+      "ตั้งก๊วนบนแถว บอกว่าขาดอีกสาม",
+      3.65
+    ],
+    [
+      7.35,
+      "คนแถวสนาม เห็นทันที",
+      2.65
+    ],
+    [
+      10.35,
+      "ครบทีม ได้เตะ",
+      2.25
+    ],
+    [
+      12.95,
+      "ขาดกี่คน บอกคนแถวนี้",
+      2.85
+    ]
+  ],
+  "music": {
+    "file": "pixel-peeker-polka-faster",
+    "from": 0
+  },
+  "vo_cuts": [
+    2.8,
+    5.35,
+    6.9,
+    8.3
+  ]
+}
